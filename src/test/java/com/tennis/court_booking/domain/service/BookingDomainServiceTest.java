@@ -76,7 +76,7 @@ class BookingDomainServiceTest {
 
         // Then
         assertNotNull(booking);
-        assertNotNull(booking.getId());
+        assertNull(booking.getId(), "ID should be null - will be assigned by persistence layer");
         assertEquals(timeSlot, booking.getTimeSlot());
     }
 
@@ -90,12 +90,16 @@ class BookingDomainServiceTest {
         // When - First booking
         TimeSlot slot1 = new TimeSlot(date, LocalTime.of(10, 0), LocalTime.of(11, 0));
         Booking booking1 = bookingDomainService.reserve(slot1, existingBookings);
-        existingBookings.add(booking1);
+        // Simulate persistence layer assigning an ID
+        Booking persistedBooking1 = new Booking(1L, booking1.getTimeSlot());
+        existingBookings.add(persistedBooking1);
 
         // When - Second booking (non-overlapping)
         TimeSlot slot2 = new TimeSlot(date, LocalTime.of(11, 0), LocalTime.of(12, 0));
         Booking booking2 = bookingDomainService.reserve(slot2, existingBookings);
-        existingBookings.add(booking2);
+        // Simulate persistence layer assigning an ID
+        Booking persistedBooking2 = new Booking(2L, booking2.getTimeSlot());
+        existingBookings.add(persistedBooking2);
 
         // When - Third booking (non-overlapping)
         TimeSlot slot3 = new TimeSlot(date, LocalTime.of(14, 0), LocalTime.of(15, 0));
@@ -105,18 +109,18 @@ class BookingDomainServiceTest {
         assertNotNull(booking1);
         assertNotNull(booking2);
         assertNotNull(booking3);
-        assertEquals(3, existingBookings.size() + 1); // +1 for booking3 not yet added
-        assertNotEquals(booking1.getId(), booking2.getId());
-        assertNotEquals(booking2.getId(), booking3.getId());
+        assertNull(booking1.getId());
+        assertNull(booking2.getId());
+        assertNull(booking3.getId());
     }
 
     @Test
-    @DisplayName("Should throw exception when TimeSlot is null")
-    void shouldThrowExceptionWhenTimeSlotIsNull() {
+    @DisplayName("Should delegate null TimeSlot validation to policy")
+    void shouldDelegateNullTimeSlotValidationToPolicy() {
         // Given
         List<Booking> existingBookings = new ArrayList<>();
 
-        // When & Then
+        // When & Then - OpeningHoursPolicy will validate and throw
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
                 () -> bookingDomainService.reserve(null, existingBookings)
@@ -125,13 +129,13 @@ class BookingDomainServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw exception when existing bookings list is null")
-    void shouldThrowExceptionWhenExistingBookingsListIsNull() {
+    @DisplayName("Should delegate null existing bookings validation to policy")
+    void shouldDelegateNullExistingBookingsValidationToPolicy() {
         // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         TimeSlot timeSlot = new TimeSlot(date, LocalTime.of(10, 0), LocalTime.of(11, 0));
 
-        // When & Then
+        // When & Then - OverlappingReservationsPolicy will validate and throw
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
                 () -> bookingDomainService.reserve(timeSlot, null)
@@ -307,29 +311,4 @@ class BookingDomainServiceTest {
         assertTrue(exception.getMessage().contains("overlaps with an existing booking"));
     }
 
-    @Test
-    @DisplayName("Should generate unique IDs for each booking")
-    void shouldGenerateUniqueIDsForEachBooking() {
-        // Given
-        LocalDate date = LocalDate.of(2024, 1, 15);
-        List<Booking> existingBookings = new ArrayList<>();
-
-        // When - Create multiple bookings
-        TimeSlot slot1 = new TimeSlot(date, LocalTime.of(9, 0), LocalTime.of(10, 0));
-        Booking booking1 = bookingDomainService.reserve(slot1, existingBookings);
-
-        TimeSlot slot2 = new TimeSlot(date, LocalTime.of(10, 0), LocalTime.of(11, 0));
-        Booking booking2 = bookingDomainService.reserve(slot2, List.of(booking1));
-
-        TimeSlot slot3 = new TimeSlot(date, LocalTime.of(11, 0), LocalTime.of(12, 0));
-        Booking booking3 = bookingDomainService.reserve(slot3, List.of(booking1, booking2));
-
-        // Then
-        assertNotNull(booking1.getId());
-        assertNotNull(booking2.getId());
-        assertNotNull(booking3.getId());
-        assertNotEquals(booking1.getId(), booking2.getId());
-        assertNotEquals(booking2.getId(), booking3.getId());
-        assertNotEquals(booking1.getId(), booking3.getId());
-    }
 }

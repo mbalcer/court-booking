@@ -120,9 +120,10 @@ src/main/java/com/tennis/court_booking/
 #### 1. Entities vs Value Objects
 
 **Entities** (identified by ID):
-- `Booking`: Aggregate root with `Long id`
+- `Booking`: Aggregate root with `Long id` (nullable for new, unpersisted bookings)
 - Equality based on ID only (`@EqualsAndHashCode(of = "id")`)
 - Contains value objects and enforces invariants
+- ID is null for new domain objects; assigned by persistence layer upon save
 
 **Value Objects** (identified by attributes):
 - `TimeSlot`: Immutable (`@Value`), no ID
@@ -176,6 +177,21 @@ This ensures thread-safety and prevents accidental state mutations.
 "The requested time slot overlaps with an existing booking. Requested: [2024-01-15 10:30-11:30], Existing booking ID: 2"
 ```
 
+#### 5. Separation of Domain and Infrastructure Concerns
+
+**ID Generation**:
+- Domain entities can have null IDs for new, unpersisted objects
+- ID generation is responsibility of the persistence layer (database auto-increment, sequences, etc.)
+- Domain service creates `Booking` with null ID
+- Persistence adapter assigns ID when saving to database
+- This keeps domain layer pure and independent of infrastructure
+
+**Validation Delegation**:
+- Domain service delegates validation to business policies
+- Policies validate their own parameters (fail-fast)
+- Service doesn't duplicate null checks already done by policies
+- This reduces redundancy and keeps service focused on orchestration
+
 ### Key Domain Logic
 
 #### TimeSlot Overlap Detection
@@ -205,9 +221,9 @@ The `TimeSlot.overlaps(TimeSlot other)` method determines if two time slots conf
 - Coordinates validation using business policies
 - Validates against opening hours policy first
 - Then validates against overlapping reservations policy
-- Returns a new `Booking` entity if all validations pass
+- Returns a new `Booking` entity with null ID if all validations pass
 - Throws `BusinessException` if any business rule is violated
-- Generates unique booking IDs using `AtomicLong`
+- **ID generation is delegated to the persistence layer** (not domain responsibility)
 
 **Usage Example**:
 ```java
@@ -220,6 +236,7 @@ TimeSlot requestedSlot = new TimeSlot(date, start, end);
 List<Booking> existingBookings = repository.findByDate(date);
 
 Booking newBooking = service.reserve(requestedSlot, existingBookings);
+// newBooking.getId() will be null - ID assigned by persistence layer
 ```
 
 ### Testing Approach
@@ -230,11 +247,11 @@ Booking newBooking = service.reserve(requestedSlot, existingBookings);
 - Tests run in milliseconds (no database/network)
 
 **Test Coverage**:
-- `BookingTest`: 13 tests (entity creation, validation, equality)
+- `BookingTest`: 13 tests (entity creation, validation with null ID support, equality)
 - `TimeSlotTest`: 16 tests (validation, overlap detection)
 - `OpeningHoursPolicyTest`: 9 tests (policy validation, boundaries)
 - `OverlappingReservationsPolicyTest`: 17 tests (overlap scenarios)
-- `BookingDomainServiceTest`: 17 tests (service orchestration, policy coordination, domain scenarios)
+- `BookingDomainServiceTest`: 16 tests (service orchestration, policy delegation, domain scenarios)
 
 **Running Specific Tests**:
 ```bash
