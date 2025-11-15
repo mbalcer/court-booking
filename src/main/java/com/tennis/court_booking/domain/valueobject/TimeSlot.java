@@ -1,5 +1,6 @@
 package com.tennis.court_booking.domain.valueobject;
 
+import com.tennis.court_booking.domain.exception.InvalidTimeSlotException;
 import lombok.Value;
 
 import java.time.LocalDate;
@@ -21,7 +22,7 @@ public class TimeSlot {
      * @param date  the date of the booking
      * @param start the start time of the booking
      * @param end   the end time of the booking
-     * @throws IllegalArgumentException if validation fails
+     * @throws InvalidTimeSlotException if validation fails
      */
     public TimeSlot(LocalDate date, LocalTime start, LocalTime end) {
         validateNotNull(date, start, end);
@@ -34,19 +35,19 @@ public class TimeSlot {
 
     private void validateNotNull(LocalDate date, LocalTime start, LocalTime end) {
         if (date == null) {
-            throw new IllegalArgumentException("Date cannot be null");
+            throw new InvalidTimeSlotException("Date cannot be null");
         }
         if (start == null) {
-            throw new IllegalArgumentException("Start time cannot be null");
+            throw new InvalidTimeSlotException("Start time cannot be null");
         }
         if (end == null) {
-            throw new IllegalArgumentException("End time cannot be null");
+            throw new InvalidTimeSlotException("End time cannot be null");
         }
     }
 
     private void validateEndAfterStart(LocalTime start, LocalTime end) {
         if (!end.isAfter(start)) {
-            throw new IllegalArgumentException("End time must be after start time");
+            throw new InvalidTimeSlotException("End time must be after start time");
         }
     }
 
