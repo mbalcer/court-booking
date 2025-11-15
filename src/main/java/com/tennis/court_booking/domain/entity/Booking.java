@@ -7,7 +7,8 @@ import lombok.ToString;
 
 /**
  * Domain entity representing a court booking.
- * Entity is identified by its id.
+ * Entity is identified by its id (when persisted).
+ * For new bookings not yet persisted, id may be null.
  */
 @Getter
 @ToString
@@ -19,14 +20,11 @@ public class Booking {
     /**
      * Creates a new Booking with the given id and time slot.
      *
-     * @param id       the unique identifier of the booking
+     * @param id       the unique identifier of the booking (null for new, unpersisted bookings)
      * @param timeSlot the time slot for the booking
-     * @throws IllegalArgumentException if id or timeSlot is null
+     * @throws IllegalArgumentException if timeSlot is null
      */
     public Booking(Long id, TimeSlot timeSlot) {
-        if (id == null) {
-            throw new IllegalArgumentException("Booking id cannot be null");
-        }
         if (timeSlot == null) {
             throw new IllegalArgumentException("TimeSlot cannot be null");
         }

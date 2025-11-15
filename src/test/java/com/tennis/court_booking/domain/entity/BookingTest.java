@@ -27,18 +27,18 @@ class BookingTest {
     }
 
     @Test
-    void shouldThrowExceptionWhenIdIsNull() {
+    void shouldCreateBookingWithNullId() {
         TimeSlot timeSlot = new TimeSlot(
                 LocalDate.of(2024, 1, 15),
                 LocalTime.of(10, 0),
                 LocalTime.of(11, 0)
         );
 
-        IllegalArgumentException exception = assertThrows(
-                IllegalArgumentException.class,
-                () -> new Booking(null, timeSlot)
-        );
-        assertEquals("Booking id cannot be null", exception.getMessage());
+        Booking booking = new Booking(null, timeSlot);
+
+        assertNotNull(booking);
+        assertNull(booking.getId());
+        assertEquals(timeSlot, booking.getTimeSlot());
     }
 
     @Test

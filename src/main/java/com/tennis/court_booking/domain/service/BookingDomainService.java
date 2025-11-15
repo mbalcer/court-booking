@@ -7,16 +7,15 @@ import com.tennis.court_booking.domain.policy.OverlappingReservationsPolicy;
 import com.tennis.court_booking.domain.valueobject.TimeSlot;
 
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Domain service that orchestrates booking reservation logic.
  * Coordinates business policies and creates valid bookings.
+ * ID assignment is delegated to the persistence layer.
  */
 public class BookingDomainService {
     private final OpeningHoursPolicy openingHoursPolicy;
     private final OverlappingReservationsPolicy overlappingReservationsPolicy;
-    private final AtomicLong idGenerator;
 
     /**
      * Creates a new BookingDomainService with the specified policies.
@@ -37,34 +36,27 @@ public class BookingDomainService {
 
         this.openingHoursPolicy = openingHoursPolicy;
         this.overlappingReservationsPolicy = overlappingReservationsPolicy;
-        this.idGenerator = new AtomicLong(1);
     }
 
     /**
      * Attempts to reserve a booking for the given time slot.
      * Validates the time slot against business policies.
+     * Returns a Booking without an ID - ID will be assigned by the persistence layer.
      *
      * @param timeSlot         the time slot to reserve
      * @param existingBookings the list of existing bookings to check for conflicts
-     * @return a new Booking if validation passes
-     * @throws BusinessException        if any business rule is violated
-     * @throws IllegalArgumentException if timeSlot or existingBookings is null
+     * @return a new Booking with null ID if validation passes
+     * @throws BusinessException if any business rule is violated
      */
     public Booking reserve(TimeSlot timeSlot, List<Booking> existingBookings) {
-        if (timeSlot == null) {
-            throw new IllegalArgumentException("TimeSlot cannot be null");
-        }
-        if (existingBookings == null) {
-            throw new IllegalArgumentException("Existing bookings list cannot be null");
-        }
-
-        // Validate against opening hours policy
+        // Validate against opening hours policy (also validates timeSlot != null)
         openingHoursPolicy.validate(timeSlot);
 
-        // Validate against overlapping reservations policy
+        // Validate against overlapping reservations policy (also validates existingBookings != null)
         overlappingReservationsPolicy.validate(timeSlot, existingBookings);
 
-        // If all validations pass, create and return the booking
-        return new Booking(idGenerator.getAndIncrement(), timeSlot);
+        // If all validations pass, create and return the booking without ID
+        // ID will be assigned by the persistence layer upon save
+        return new Booking(null, timeSlot);
     }
 }
