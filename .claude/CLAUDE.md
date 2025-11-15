@@ -73,21 +73,21 @@ This project follows **hexagonal architecture** with strict dependency rules: de
 │              APPLICATION LAYER (TODO)                   │
 │        Use Cases │ Application Services │ Ports         │
 ├─────────────────────────────────────────────────────────┤
-│                  DOMAIN LAYER (CORE)                    │
-│   Entities │ Value Objects │ Policies │ Exceptions      │
+│              DOMAIN LAYER (CORE) ✓ COMPLETE             │
+│  Entities │ Value Objects │ Services │ Policies │ Excp. │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### Current Implementation Status
 
-**Completed** (Steps 1-4):
+**Completed** (Steps 1-5):
 - Domain entities (`Booking`)
 - Value objects (`TimeSlot`)
 - Business policies (`OpeningHoursPolicy`, `OverlappingReservationsPolicy`)
 - Domain exceptions (`BusinessException`, `InvalidTimeSlotException`)
+- Domain services (`BookingDomainService`)
 
-**To Be Implemented** (Steps 5+):
-- Domain services
+**To Be Implemented** (Steps 6+):
 - Ports (interfaces for repositories, event publishers, use cases)
 - Application services
 - REST adapters (controllers, DTOs)
@@ -108,6 +108,8 @@ src/main/java/com/tennis/court_booking/
     ├── policy/
     │   ├── OpeningHoursPolicy.java    # Validates against operating hours
     │   └── OverlappingReservationsPolicy.java  # Prevents double bookings
+    ├── service/
+    │   └── BookingDomainService.java  # Orchestrates booking reservation logic
     └── exception/
         ├── BusinessException.java      # Business rule violations
         └── InvalidTimeSlotException.java  # Value object validation failures
@@ -196,6 +198,30 @@ The `TimeSlot.overlaps(TimeSlot other)` method determines if two time slots conf
 - Uses `TimeSlot.overlaps()` to detect conflicts
 - Takes list of existing bookings as parameter
 
+#### Domain Service
+
+**BookingDomainService**:
+- Orchestrates the booking reservation process
+- Coordinates validation using business policies
+- Validates against opening hours policy first
+- Then validates against overlapping reservations policy
+- Returns a new `Booking` entity if all validations pass
+- Throws `BusinessException` if any business rule is violated
+- Generates unique booking IDs using `AtomicLong`
+
+**Usage Example**:
+```java
+BookingDomainService service = new BookingDomainService(
+    openingHoursPolicy,
+    overlappingReservationsPolicy
+);
+
+TimeSlot requestedSlot = new TimeSlot(date, start, end);
+List<Booking> existingBookings = repository.findByDate(date);
+
+Booking newBooking = service.reserve(requestedSlot, existingBookings);
+```
+
 ### Testing Approach
 
 **Unit Tests** (no Spring context required):
@@ -208,6 +234,7 @@ The `TimeSlot.overlaps(TimeSlot other)` method determines if two time slots conf
 - `TimeSlotTest`: 16 tests (validation, overlap detection)
 - `OpeningHoursPolicyTest`: 9 tests (policy validation, boundaries)
 - `OverlappingReservationsPolicyTest`: 17 tests (overlap scenarios)
+- `BookingDomainServiceTest`: 17 tests (service orchestration, policy coordination, domain scenarios)
 
 **Running Specific Tests**:
 ```bash
@@ -216,6 +243,9 @@ The `TimeSlot.overlaps(TimeSlot other)` method determines if two time slots conf
 
 # Run policy tests
 ./gradlew test --tests "com.tennis.court_booking.domain.policy.*"
+
+# Run service tests
+./gradlew test --tests "com.tennis.court_booking.domain.service.*"
 
 # Run a specific test class
 ./gradlew test --tests com.tennis.court_booking.domain.valueobject.TimeSlotTest
@@ -277,18 +307,25 @@ The `TimeSlot.overlaps(TimeSlot other)` method determines if two time slots conf
 3. Implement `validate()` method throwing `BusinessException`
 4. Write tests for all business rule scenarios
 
+**To add a new domain service**:
+1. Create in `domain/service/` package
+2. Accept policies and dependencies via constructor
+3. Validate constructor parameters (no nulls)
+4. Orchestrate business logic and policies
+5. Return domain entities or throw exceptions
+6. Write comprehensive scenario tests
+
 ## Next Steps in Implementation
 
-The domain layer is complete. The next phases are:
+The domain layer (Steps 1-5) is now complete. The next phases are:
 
-1. **Domain Service**: Implement `BookingDomainService` to orchestrate policies
-2. **Ports**: Define interfaces (`BookingRepository`, `BookingUseCase`, `BookingEventPublisher`)
-3. **Application Service**: Implement `BookingApplicationService`
-4. **REST Adapter**: Controllers and DTOs for HTTP API
-5. **Persistence Adapter**: JPA entities and repository implementations
-6. **Event Adapter**: Kafka event publishing
-7. **Configuration**: Wire dependencies with Spring `@Configuration`
-8. **Integration Tests**: End-to-end testing with all layers
+1. **Ports**: Define interfaces (`BookingRepository`, `BookingUseCase`, `BookingEventPublisher`)
+2. **Application Service**: Implement `BookingApplicationService` using domain service and ports
+3. **REST Adapter**: Controllers and DTOs for HTTP API
+4. **Persistence Adapter**: JPA entities and repository implementations
+5. **Event Adapter**: Kafka event publishing
+6. **Configuration**: Wire dependencies with Spring `@Configuration`
+7. **Integration Tests**: End-to-end testing with all layers
 
 ## References
 
