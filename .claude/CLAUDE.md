@@ -132,6 +132,9 @@ src/main/java/com/tennis/court_booking/
     │   └── out/                       # Outbound ports (infrastructure interfaces)
     │       ├── BookingRepository.java      # Repository interface
     │       └── BookingEventPublisher.java  # Event publisher interface
+    ├── mapper/                        # Mappers for DTO/domain conversions
+    │   ├── TimeSlotMapper.java        # Maps ReserveCommand to TimeSlot
+    │   └── BookingMapper.java         # Maps Booking to DTOs/events
     └── service/
         └── BookingApplicationService.java  # Use case implementation
 ```
@@ -311,6 +314,40 @@ BookingResponse response = service.reserve(command);
 // Response contains: id=1, date=2024-01-15, startTime=10:00, endTime=11:00
 ```
 
+#### Mappers
+
+**TimeSlotMapper**:
+- Converts `ReserveCommand` DTO to `TimeSlot` value object
+- Static utility class with private constructor
+- Validates command is not null before conversion
+- Delegates validation to `TimeSlot` constructor
+
+**BookingMapper**:
+- Converts `Booking` entity to `BookingResponse` DTO (for API responses)
+- Converts `Booking` entity to `BookingCreatedEvent` (for event publishing)
+- Static utility class with private constructor
+- Validates booking is not null before conversion
+- Ensures consistent data across response and event
+
+**Key Design Principles**:
+- **Stateless Utility Classes**: Mappers are stateless with only static methods
+- **Single Responsibility**: Each mapper handles specific conversions
+- **Separation of Concerns**: Keeps conversion logic out of application services
+- **Consistency**: Same booking produces consistent response and event data
+- **Null Safety**: All mappers validate inputs before conversion
+
+**Usage Examples**:
+```java
+// Convert command to domain object
+TimeSlot timeSlot = TimeSlotMapper.toTimeSlot(command);
+
+// Convert domain object to response DTO
+BookingResponse response = BookingMapper.toBookingResponse(booking);
+
+// Convert domain object to event
+BookingCreatedEvent event = BookingMapper.toBookingCreatedEvent(booking);
+```
+
 ### Testing Approach
 
 **Unit Tests** (no Spring context required):
@@ -327,6 +364,8 @@ BookingResponse response = service.reserve(command);
   - `BookingDomainServiceTest`: 16 tests (service orchestration, policy delegation, domain scenarios)
 - **Application Layer**:
   - `BookingApplicationServiceTest`: 16 tests with Mockito (constructor validation, successful flow, exception handling, mocked repository & event publisher)
+  - `TimeSlotMapperTest`: 10 tests (successful mapping, null handling, invalid data propagation, consistency)
+  - `BookingMapperTest`: 13 tests (response mapping, event mapping, null handling, consistency)
 
 **Running Specific Tests**:
 ```bash
@@ -343,9 +382,13 @@ BookingResponse response = service.reserve(command);
 ./gradlew test --tests "com.tennis.court_booking.domain.service.*"
 ./gradlew test --tests "com.tennis.court_booking.application.service.*"
 
+# Run mapper tests
+./gradlew test --tests "com.tennis.court_booking.application.mapper.*"
+
 # Run a specific test class
 ./gradlew test --tests com.tennis.court_booking.domain.valueobject.TimeSlotTest
 ./gradlew test --tests com.tennis.court_booking.application.service.BookingApplicationServiceTest
+./gradlew test --tests com.tennis.court_booking.application.mapper.BookingMapperTest
 ```
 
 ## Dependencies
@@ -421,17 +464,31 @@ BookingResponse response = service.reserve(command);
 5. Implement use case interface
 6. Validate constructor dependencies (no nulls)
 7. Coordinate between domain service and outbound ports
-8. Handle DTO-to-domain and domain-to-DTO conversions
+8. Use mappers for DTO-to-domain and domain-to-DTO conversions
 9. Write comprehensive unit tests using Mockito for port mocks
+
+**To add a new mapper**:
+1. Create in `application/mapper/` package
+2. Make it a utility class with private constructor throwing `UnsupportedOperationException`
+3. Use static methods for all conversions
+4. Validate all inputs (check for nulls)
+5. Keep conversions simple and focused (no business logic)
+6. Write comprehensive unit tests covering:
+   - Successful mapping scenarios
+   - Null parameter handling
+   - Exception propagation from constructors
+   - Consistency across multiple conversions
+7. Name methods clearly: `toTimeSlot()`, `toBookingResponse()`, `toBookingCreatedEvent()`
 
 ### Application Layer Rules
 
 1. **No Domain Logic**: Application services only orchestrate; domain services contain business logic
 2. **Depend on Interfaces**: Only depend on port interfaces, never on concrete adapter implementations
 3. **DTO Boundaries**: Use command/response DTOs to prevent domain entities from leaking to adapters
-4. **Constructor Injection**: Accept all dependencies via constructor for testability
-5. **Exception Propagation**: Let domain exceptions bubble up; don't catch and swallow them
-6. **Transaction Demarcation**: Application service methods define transactional boundaries (via Spring `@Transactional` when configured)
+4. **Use Mappers**: Delegate DTO/domain conversions to mapper classes; keep services focused on orchestration
+5. **Constructor Injection**: Accept all dependencies via constructor for testability
+6. **Exception Propagation**: Let domain exceptions bubble up; don't catch and swallow them
+7. **Transaction Demarcation**: Application service methods define transactional boundaries (via Spring `@Transactional` when configured)
 
 ## Next Steps in Implementation
 

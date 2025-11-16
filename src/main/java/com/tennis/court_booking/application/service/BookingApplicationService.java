@@ -1,5 +1,7 @@
 package com.tennis.court_booking.application.service;
 
+import com.tennis.court_booking.application.mapper.BookingMapper;
+import com.tennis.court_booking.application.mapper.TimeSlotMapper;
 import com.tennis.court_booking.application.port.in.BookingResponse;
 import com.tennis.court_booking.application.port.in.BookingUseCase;
 import com.tennis.court_booking.application.port.in.ReserveCommand;
@@ -64,12 +66,12 @@ public class BookingApplicationService implements BookingUseCase {
      * Reserves a new court booking for the specified time slot.
      *
      * This implementation:
-     * 1. Converts the command to a domain TimeSlot
+     * 1. Converts the command to a domain TimeSlot using TimeSlotMapper
      * 2. Retrieves existing bookings for the date
      * 3. Delegates to domain service for business rule validation
      * 4. Persists the booking and obtains the assigned ID
-     * 5. Publishes a booking created event
-     * 6. Returns a booking response DTO
+     * 5. Publishes a booking created event using BookingMapper
+     * 6. Returns a booking response DTO using BookingMapper
      *
      * @param command the reservation command containing date, start, and end times
      * @return the booking response with assigned ID and booking details
@@ -78,8 +80,8 @@ public class BookingApplicationService implements BookingUseCase {
      */
     @Override
     public BookingResponse reserve(ReserveCommand command) {
-        // 1. Convert command to domain TimeSlot (validates in TimeSlot constructor)
-        TimeSlot timeSlot = new TimeSlot(command.getDate(), command.getStart(), command.getEnd());
+        // 1. Convert command to domain TimeSlot using mapper
+        TimeSlot timeSlot = TimeSlotMapper.toTimeSlot(command);
 
         // 2. Retrieve existing bookings for the date
         List<Booking> existingBookings = bookingRepository.findByDate(command.getDate());
@@ -91,21 +93,11 @@ public class BookingApplicationService implements BookingUseCase {
         // 4. Persist the booking - repository assigns the ID
         Booking savedBooking = bookingRepository.save(newBooking);
 
-        // 5. Publish domain event
-        BookingCreatedEvent event = new BookingCreatedEvent(
-                savedBooking.getId(),
-                savedBooking.getTimeSlot().getDate(),
-                savedBooking.getTimeSlot().getStart(),
-                savedBooking.getTimeSlot().getEnd()
-        );
+        // 5. Publish domain event using mapper
+        BookingCreatedEvent event = BookingMapper.toBookingCreatedEvent(savedBooking);
         eventPublisher.publish(event);
 
-        // 6. Convert domain entity to response DTO
-        return new BookingResponse(
-                savedBooking.getId(),
-                savedBooking.getTimeSlot().getDate(),
-                savedBooking.getTimeSlot().getStart(),
-                savedBooking.getTimeSlot().getEnd()
-        );
+        // 6. Convert domain entity to response DTO using mapper
+        return BookingMapper.toBookingResponse(savedBooking);
     }
 }
