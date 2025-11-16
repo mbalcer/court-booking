@@ -70,7 +70,7 @@ This project follows **hexagonal architecture** with strict dependency rules: de
 │                   ADAPTERS (TODO)                       │
 │  REST Controllers │ JPA Repositories │ Kafka Publishers │
 ├─────────────────────────────────────────────────────────┤
-│              APPLICATION LAYER (TODO)                   │
+│          APPLICATION LAYER ✓ COMPLETE                   │
 │        Use Cases │ Application Services │ Ports         │
 ├─────────────────────────────────────────────────────────┤
 │              DOMAIN LAYER (CORE) ✓ COMPLETE             │
@@ -80,39 +80,60 @@ This project follows **hexagonal architecture** with strict dependency rules: de
 
 ### Current Implementation Status
 
-**Completed** (Steps 1-5):
-- Domain entities (`Booking`)
-- Value objects (`TimeSlot`)
-- Business policies (`OpeningHoursPolicy`, `OverlappingReservationsPolicy`)
-- Domain exceptions (`BusinessException`, `InvalidTimeSlotException`)
-- Domain services (`BookingDomainService`)
+**Completed** (Steps 1-7):
+- **Domain Layer** (Steps 1-5):
+  - Domain entities (`Booking`)
+  - Value objects (`TimeSlot`)
+  - Business policies (`OpeningHoursPolicy`, `OverlappingReservationsPolicy`)
+  - Domain exceptions (`BusinessException`, `InvalidTimeSlotException`)
+  - Domain services (`BookingDomainService`)
+  - Domain events (`BookingCreatedEvent`)
 
-**To Be Implemented** (Steps 6+):
-- Ports (interfaces for repositories, event publishers, use cases)
-- Application services
+- **Application Layer** (Steps 6-7):
+  - **Ports** (Step 6):
+    - Inbound port: `BookingUseCase` with `ReserveCommand` and `BookingResponse`
+    - Outbound ports: `BookingRepository`, `BookingEventPublisher`
+  - **Application Service** (Step 7):
+    - `BookingApplicationService` implementing use case orchestration
+
+**To Be Implemented** (Steps 8+):
 - REST adapters (controllers, DTOs)
 - Persistence adapters (JPA entities, Spring Data repositories)
 - Event publishing adapters (Kafka)
 - Configuration and wiring
+- Integration tests
 
 ### Package Structure
 
 ```
 src/main/java/com/tennis/court_booking/
 ├── CourtBookingApplication.java       # Spring Boot entry point
-└── domain/                            # Pure domain logic (no Spring dependencies)
-    ├── entity/
-    │   └── Booking.java               # Aggregate root with identity-based equality
-    ├── valueobject/
-    │   └── TimeSlot.java              # Immutable value object with validation
-    ├── policy/
-    │   ├── OpeningHoursPolicy.java    # Validates against operating hours
-    │   └── OverlappingReservationsPolicy.java  # Prevents double bookings
-    ├── service/
-    │   └── BookingDomainService.java  # Orchestrates booking reservation logic
-    └── exception/
-        ├── BusinessException.java      # Business rule violations
-        └── InvalidTimeSlotException.java  # Value object validation failures
+├── domain/                            # Pure domain logic (no Spring dependencies)
+│   ├── entity/
+│   │   └── Booking.java               # Aggregate root with identity-based equality
+│   ├── valueobject/
+│   │   └── TimeSlot.java              # Immutable value object with validation
+│   ├── policy/
+│   │   ├── OpeningHoursPolicy.java    # Validates against operating hours
+│   │   └── OverlappingReservationsPolicy.java  # Prevents double bookings
+│   ├── service/
+│   │   └── BookingDomainService.java  # Orchestrates booking reservation logic
+│   ├── event/
+│   │   └── BookingCreatedEvent.java   # Domain event for booking creation
+│   └── exception/
+│       ├── BusinessException.java      # Business rule violations
+│       └── InvalidTimeSlotException.java  # Value object validation failures
+└── application/                       # Application layer (orchestrates use cases)
+    ├── port/
+    │   ├── in/                        # Inbound ports (use case interfaces)
+    │   │   ├── BookingUseCase.java    # Reserve booking use case interface
+    │   │   ├── ReserveCommand.java    # Command DTO for reservation
+    │   │   └── BookingResponse.java   # Response DTO for booking
+    │   └── out/                       # Outbound ports (infrastructure interfaces)
+    │       ├── BookingRepository.java      # Repository interface
+    │       └── BookingEventPublisher.java  # Event publisher interface
+    └── service/
+        └── BookingApplicationService.java  # Use case implementation
 ```
 
 ### Domain Model Principles
@@ -239,6 +260,57 @@ Booking newBooking = service.reserve(requestedSlot, existingBookings);
 // newBooking.getId() will be null - ID assigned by persistence layer
 ```
 
+### Application Layer
+
+#### Ports (Hexagonal Architecture Interfaces)
+
+**Inbound Port (Primary/Driving)**:
+- `BookingUseCase`: Defines the reserve booking use case
+- `ReserveCommand`: Input DTO carrying date, start time, and end time
+- `BookingResponse`: Output DTO with booking ID and time slot details
+
+**Outbound Ports (Secondary/Driven)**:
+- `BookingRepository`: Interface for persistence operations (findByDate, save, findById, delete)
+- `BookingEventPublisher`: Interface for publishing domain events to external systems
+
+#### Application Service
+
+**BookingApplicationService**:
+- Implements `BookingUseCase` interface
+- Orchestrates the complete booking reservation flow
+- Coordinates between domain service and outbound ports
+- Responsibilities:
+  1. Converts command DTOs to domain objects (`ReserveCommand` → `TimeSlot`)
+  2. Retrieves existing bookings via `BookingRepository`
+  3. Delegates business logic to `BookingDomainService`
+  4. Persists the new booking via `BookingRepository` (ID assigned here)
+  5. Creates and publishes `BookingCreatedEvent` via `BookingEventPublisher`
+  6. Converts domain entity to response DTO (`Booking` → `BookingResponse`)
+
+**Key Design Principles**:
+- **Separation of Concerns**: Domain logic stays in domain service; orchestration in application service
+- **Dependency Inversion**: Depends on port interfaces, not concrete implementations
+- **DTO Translation**: Prevents domain entities from leaking to adapters
+- **Transaction Boundary**: Application service defines the transactional scope (to be implemented in Step 11)
+
+**Usage Example**:
+```java
+BookingApplicationService service = new BookingApplicationService(
+    bookingRepository,
+    eventPublisher,
+    domainService
+);
+
+ReserveCommand command = new ReserveCommand(
+    LocalDate.of(2024, 1, 15),
+    LocalTime.of(10, 0),
+    LocalTime.of(11, 0)
+);
+
+BookingResponse response = service.reserve(command);
+// Response contains: id=1, date=2024-01-15, startTime=10:00, endTime=11:00
+```
+
 ### Testing Approach
 
 **Unit Tests** (no Spring context required):
@@ -247,25 +319,33 @@ Booking newBooking = service.reserve(requestedSlot, existingBookings);
 - Tests run in milliseconds (no database/network)
 
 **Test Coverage**:
-- `BookingTest`: 13 tests (entity creation, validation with null ID support, equality)
-- `TimeSlotTest`: 16 tests (validation, overlap detection)
-- `OpeningHoursPolicyTest`: 9 tests (policy validation, boundaries)
-- `OverlappingReservationsPolicyTest`: 17 tests (overlap scenarios)
-- `BookingDomainServiceTest`: 16 tests (service orchestration, policy delegation, domain scenarios)
+- **Domain Layer**:
+  - `BookingTest`: 13 tests (entity creation, validation with null ID support, equality)
+  - `TimeSlotTest`: 16 tests (validation, overlap detection)
+  - `OpeningHoursPolicyTest`: 9 tests (policy validation, boundaries)
+  - `OverlappingReservationsPolicyTest`: 17 tests (overlap scenarios)
+  - `BookingDomainServiceTest`: 16 tests (service orchestration, policy delegation, domain scenarios)
+- **Application Layer**:
+  - `BookingApplicationServiceTest`: 16 tests with Mockito (constructor validation, successful flow, exception handling, mocked repository & event publisher)
 
 **Running Specific Tests**:
 ```bash
 # Run domain layer tests only
 ./gradlew test --tests "com.tennis.court_booking.domain.*"
 
+# Run application layer tests only
+./gradlew test --tests "com.tennis.court_booking.application.*"
+
 # Run policy tests
 ./gradlew test --tests "com.tennis.court_booking.domain.policy.*"
 
-# Run service tests
+# Run service tests (both domain and application)
 ./gradlew test --tests "com.tennis.court_booking.domain.service.*"
+./gradlew test --tests "com.tennis.court_booking.application.service.*"
 
 # Run a specific test class
 ./gradlew test --tests com.tennis.court_booking.domain.valueobject.TimeSlotTest
+./gradlew test --tests com.tennis.court_booking.application.service.BookingApplicationServiceTest
 ```
 
 ## Dependencies
@@ -284,6 +364,7 @@ Booking newBooking = service.reserve(requestedSlot, existingBookings);
 
 **Testing**:
 - JUnit 5 (Jupiter)
+- Mockito (mocking framework for unit tests)
 - Spring Boot Test (integration tests, when implemented)
 
 ## Code Conventions
@@ -332,17 +413,37 @@ Booking newBooking = service.reserve(requestedSlot, existingBookings);
 5. Return domain entities or throw exceptions
 6. Write comprehensive scenario tests
 
+**To add a new application service (use case)**:
+1. Define inbound port interface in `application/port/in/`
+2. Define command and response DTOs in same package
+3. Define required outbound ports in `application/port/out/`
+4. Create service implementation in `application/service/`
+5. Implement use case interface
+6. Validate constructor dependencies (no nulls)
+7. Coordinate between domain service and outbound ports
+8. Handle DTO-to-domain and domain-to-DTO conversions
+9. Write comprehensive unit tests using Mockito for port mocks
+
+### Application Layer Rules
+
+1. **No Domain Logic**: Application services only orchestrate; domain services contain business logic
+2. **Depend on Interfaces**: Only depend on port interfaces, never on concrete adapter implementations
+3. **DTO Boundaries**: Use command/response DTOs to prevent domain entities from leaking to adapters
+4. **Constructor Injection**: Accept all dependencies via constructor for testability
+5. **Exception Propagation**: Let domain exceptions bubble up; don't catch and swallow them
+6. **Transaction Demarcation**: Application service methods define transactional boundaries (via Spring `@Transactional` when configured)
+
 ## Next Steps in Implementation
 
-The domain layer (Steps 1-5) is now complete. The next phases are:
+The domain layer (Steps 1-5) and application layer (Steps 6-7) are now complete. The next phases are:
 
-1. **Ports**: Define interfaces (`BookingRepository`, `BookingUseCase`, `BookingEventPublisher`)
-2. **Application Service**: Implement `BookingApplicationService` using domain service and ports
-3. **REST Adapter**: Controllers and DTOs for HTTP API
-4. **Persistence Adapter**: JPA entities and repository implementations
-5. **Event Adapter**: Kafka event publishing
-6. **Configuration**: Wire dependencies with Spring `@Configuration`
-7. **Integration Tests**: End-to-end testing with all layers
+1. **REST Adapter** (Step 8): Controllers and DTOs for HTTP API
+2. **Persistence Adapter** (Step 9): JPA entities and repository implementations
+3. **Event Adapter** (Step 10): Kafka event publishing
+4. **Configuration** (Step 11): Wire dependencies with Spring `@Configuration`
+5. **Integration Tests** (Step 12): End-to-end testing with all layers
+6. **Additional Endpoints** (Step 13): GET and DELETE operations
+7. **Refactoring** (Step 14): Ensure clean separation of concerns
 
 ## References
 
