@@ -67,8 +67,8 @@ This project follows **hexagonal architecture** with strict dependency rules: de
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   ADAPTERS (TODO)                       │
-│  REST Controllers │ JPA Repositories │ Kafka Publishers │
+│                   ADAPTERS LAYER                        │
+│  REST ✓ COMPLETE │ JPA Repositories │ Kafka Publishers │
 ├─────────────────────────────────────────────────────────┤
 │          APPLICATION LAYER ✓ COMPLETE                   │
 │        Use Cases │ Application Services │ Ports         │
@@ -80,7 +80,7 @@ This project follows **hexagonal architecture** with strict dependency rules: de
 
 ### Current Implementation Status
 
-**Completed** (Steps 1-7):
+**Completed** (Steps 1-8):
 - **Domain Layer** (Steps 1-5):
   - Domain entities (`Booking`)
   - Value objects (`TimeSlot`)
@@ -95,13 +95,22 @@ This project follows **hexagonal architecture** with strict dependency rules: de
     - Outbound ports: `BookingRepository`, `BookingEventPublisher`
   - **Application Service** (Step 7):
     - `BookingApplicationService` implementing use case orchestration
+  - **Mappers**:
+    - `TimeSlotMapper` for command-to-domain conversions
+    - `BookingMapper` for domain-to-DTO conversions
 
-**To Be Implemented** (Steps 8+):
-- REST adapters (controllers, DTOs)
+- **Adapter Layer** (Step 8):
+  - **REST Adapter**:
+    - `BookingController` with POST `/api/bookings` endpoint
+    - REST DTOs: `ReserveBookingRequest`, `ReserveBookingResponse`, `ErrorResponse`
+    - `GlobalExceptionHandler` for centralized error handling
+
+**To Be Implemented** (Steps 9+):
 - Persistence adapters (JPA entities, Spring Data repositories)
 - Event publishing adapters (Kafka)
 - Configuration and wiring
 - Integration tests
+- Additional REST endpoints (GET, DELETE)
 
 ### Package Structure
 
@@ -123,20 +132,31 @@ src/main/java/com/tennis/court_booking/
 │   └── exception/
 │       ├── BusinessException.java      # Business rule violations
 │       └── InvalidTimeSlotException.java  # Value object validation failures
-└── application/                       # Application layer (orchestrates use cases)
-    ├── port/
-    │   ├── in/                        # Inbound ports (use case interfaces)
-    │   │   ├── BookingUseCase.java    # Reserve booking use case interface
-    │   │   ├── ReserveCommand.java    # Command DTO for reservation
-    │   │   └── BookingResponse.java   # Response DTO for booking
-    │   └── out/                       # Outbound ports (infrastructure interfaces)
-    │       ├── BookingRepository.java      # Repository interface
-    │       └── BookingEventPublisher.java  # Event publisher interface
-    ├── mapper/                        # Mappers for DTO/domain conversions
-    │   ├── TimeSlotMapper.java        # Maps ReserveCommand to TimeSlot
-    │   └── BookingMapper.java         # Maps Booking to DTOs/events
-    └── service/
-        └── BookingApplicationService.java  # Use case implementation
+├── application/                       # Application layer (orchestrates use cases)
+│   ├── port/
+│   │   ├── in/                        # Inbound ports (use case interfaces)
+│   │   │   ├── BookingUseCase.java    # Reserve booking use case interface
+│   │   │   ├── ReserveCommand.java    # Command DTO for reservation
+│   │   │   └── BookingResponse.java   # Response DTO for booking
+│   │   └── out/                       # Outbound ports (infrastructure interfaces)
+│   │       ├── BookingRepository.java      # Repository interface
+│   │       └── BookingEventPublisher.java  # Event publisher interface
+│   ├── mapper/                        # Mappers for DTO/domain conversions
+│   │   ├── TimeSlotMapper.java        # Maps ReserveCommand to TimeSlot
+│   │   └── BookingMapper.java         # Maps Booking to DTOs/events
+│   └── service/
+│       └── BookingApplicationService.java  # Use case implementation
+└── adapter/                           # Adapter layer (infrastructure implementations)
+    └── in/                            # Inbound adapters (driving)
+        └── web/                       # REST API adapter
+            ├── controller/
+            │   └── BookingController.java  # REST controller for bookings
+            ├── dto/
+            │   ├── ReserveBookingRequest.java   # REST request DTO
+            │   ├── ReserveBookingResponse.java  # REST response DTO
+            │   └── ErrorResponse.java           # Error response DTO
+            └── exception/
+                └── GlobalExceptionHandler.java  # Global REST exception handler
 ```
 
 ### Domain Model Principles
@@ -348,6 +368,88 @@ BookingResponse response = BookingMapper.toBookingResponse(booking);
 BookingCreatedEvent event = BookingMapper.toBookingCreatedEvent(booking);
 ```
 
+### REST Adapter (Inbound Adapter)
+
+The REST adapter is the **inbound (driving) adapter** that exposes HTTP endpoints for the booking application. It translates HTTP requests into application use case calls and converts responses back to HTTP format.
+
+#### REST Controller
+
+**BookingController**:
+- Exposes REST endpoints for booking operations
+- Depends on `BookingUseCase` interface (not concrete implementation)
+- Handles HTTP request/response mapping
+- Returns appropriate HTTP status codes (201 Created for successful bookings)
+- Thin adapter layer with no business logic
+
+**Endpoint**:
+- `POST /api/bookings`: Create a new court booking reservation
+
+#### REST DTOs
+
+**ReserveBookingRequest**:
+- Receives JSON request data from HTTP clients
+- Contains: `date`, `start`, `end`
+- Uses `@NoArgsConstructor` and `@AllArgsConstructor` for JSON deserialization
+
+**ReserveBookingResponse**:
+- Returns JSON response data to HTTP clients
+- Contains: `id`, `date`, `startTime`, `endTime`
+- Mapped from `BookingResponse` returned by application layer
+
+**ErrorResponse**:
+- Standardized error response structure
+- Contains: `timestamp`, `status`, `error`, `message`, `path`
+- Used by exception handler for all error responses
+
+#### Global Exception Handler
+
+**GlobalExceptionHandler**:
+- Centralized exception handling using `@RestControllerAdvice`
+- Translates domain exceptions into appropriate HTTP responses
+- Exception mappings:
+  - `BusinessException` → HTTP 400 (Bad Request)
+  - `InvalidTimeSlotException` → HTTP 400 (Bad Request)
+  - `IllegalArgumentException` → HTTP 400 (Bad Request)
+  - Generic `Exception` → HTTP 500 (Internal Server Error)
+- Preserves original error messages from domain layer
+- Includes timestamp and request path in all error responses
+
+**Key Design Principles**:
+- **Separation of Concerns**: Controller only handles HTTP concerns; no business logic
+- **Dependency Inversion**: Depends on use case interface, not concrete service
+- **DTO Translation**: Maps between REST DTOs and application layer DTOs
+- **Centralized Error Handling**: Single location for all HTTP error responses
+- **Consistent Error Format**: All errors follow the same response structure
+
+**Usage Example**:
+```bash
+# Create a new booking
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{
+    "date": "2024-01-15",
+    "start": "10:00",
+    "end": "11:00"
+  }'
+
+# Success response (HTTP 201)
+{
+  "id": 1,
+  "date": "2024-01-15",
+  "startTime": "10:00:00",
+  "endTime": "11:00:00"
+}
+
+# Error response (HTTP 400)
+{
+  "timestamp": "2024-01-15T09:30:00",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Booking cannot start before opening time. Start: 07:00, Opening time: 08:00",
+  "path": "/api/bookings"
+}
+```
+
 ### Testing Approach
 
 **Unit Tests** (no Spring context required):
@@ -366,6 +468,9 @@ BookingCreatedEvent event = BookingMapper.toBookingCreatedEvent(booking);
   - `BookingApplicationServiceTest`: 16 tests with Mockito (constructor validation, successful flow, exception handling, mocked repository & event publisher)
   - `TimeSlotMapperTest`: 10 tests (successful mapping, null handling, invalid data propagation, consistency)
   - `BookingMapperTest`: 13 tests (response mapping, event mapping, null handling, consistency)
+- **Adapter Layer (REST)**:
+  - `BookingControllerTest`: 8 tests with MockMvc (constructor validation, successful booking creation, error handling for all exception types, request/response mapping)
+  - `GlobalExceptionHandlerTest`: 8 tests (exception handling, error response structure, message preservation, timestamp validation)
 
 **Running Specific Tests**:
 ```bash
@@ -374,6 +479,9 @@ BookingCreatedEvent event = BookingMapper.toBookingCreatedEvent(booking);
 
 # Run application layer tests only
 ./gradlew test --tests "com.tennis.court_booking.application.*"
+
+# Run adapter layer tests only
+./gradlew test --tests "com.tennis.court_booking.adapter.*"
 
 # Run policy tests
 ./gradlew test --tests "com.tennis.court_booking.domain.policy.*"
@@ -385,10 +493,13 @@ BookingCreatedEvent event = BookingMapper.toBookingCreatedEvent(booking);
 # Run mapper tests
 ./gradlew test --tests "com.tennis.court_booking.application.mapper.*"
 
+# Run REST controller tests
+./gradlew test --tests "com.tennis.court_booking.adapter.in.web.controller.*"
+
 # Run a specific test class
 ./gradlew test --tests com.tennis.court_booking.domain.valueobject.TimeSlotTest
 ./gradlew test --tests com.tennis.court_booking.application.service.BookingApplicationServiceTest
-./gradlew test --tests com.tennis.court_booking.application.mapper.BookingMapperTest
+./gradlew test --tests com.tennis.court_booking.adapter.in.web.controller.BookingControllerTest
 ```
 
 ## Dependencies
@@ -480,6 +591,20 @@ BookingCreatedEvent event = BookingMapper.toBookingCreatedEvent(booking);
    - Consistency across multiple conversions
 7. Name methods clearly: `toTimeSlot()`, `toBookingResponse()`, `toBookingCreatedEvent()`
 
+**To add a new REST endpoint**:
+1. Create REST DTOs in `adapter/in/web/dto/` package
+2. Use `@NoArgsConstructor` and `@AllArgsConstructor` for request DTOs (JSON deserialization)
+3. Add endpoint method to `BookingController` (or create new controller)
+4. Map REST DTOs to application layer command/response DTOs
+5. Call the appropriate use case interface method
+6. Return `ResponseEntity` with appropriate HTTP status code
+7. No business logic in controller (only HTTP concerns and DTO mapping)
+8. Write comprehensive tests using `@WebMvcTest` and MockMvc:
+   - Successful request/response scenarios
+   - Exception handling (verify HTTP status and error response)
+   - Request/response mapping validation
+   - Edge cases and boundary conditions
+
 ### Application Layer Rules
 
 1. **No Domain Logic**: Application services only orchestrate; domain services contain business logic
@@ -490,17 +615,28 @@ BookingCreatedEvent event = BookingMapper.toBookingCreatedEvent(booking);
 6. **Exception Propagation**: Let domain exceptions bubble up; don't catch and swallow them
 7. **Transaction Demarcation**: Application service methods define transactional boundaries (via Spring `@Transactional` when configured)
 
+### Adapter Layer Rules
+
+1. **No Business Logic**: Adapters only translate between external formats and application layer
+2. **Depend on Use Case Interfaces**: Controllers depend on use case interfaces, not concrete services
+3. **Thin Adapter Pattern**: Keep adapters as thin as possible; all orchestration in application layer
+4. **DTO Mapping**: Map between adapter-specific DTOs and application layer DTOs
+5. **HTTP Concerns Only**: Controllers handle HTTP-specific concerns (status codes, headers, etc.)
+6. **Exception Translation**: Use exception handlers to translate domain exceptions to HTTP responses
+7. **No Direct Domain Access**: Never bypass application layer to call domain services directly
+8. **Validation**: Basic format validation can occur in adapters, but business rules stay in domain
+
 ## Next Steps in Implementation
 
-The domain layer (Steps 1-5) and application layer (Steps 6-7) are now complete. The next phases are:
+The domain layer (Steps 1-5), application layer (Steps 6-7), and REST adapter (Step 8) are now complete. The next phases are:
 
-1. **REST Adapter** (Step 8): Controllers and DTOs for HTTP API
+1. ~~**REST Adapter** (Step 8): Controllers and DTOs for HTTP API~~ ✓ COMPLETE
 2. **Persistence Adapter** (Step 9): JPA entities and repository implementations
 3. **Event Adapter** (Step 10): Kafka event publishing
 4. **Configuration** (Step 11): Wire dependencies with Spring `@Configuration`
 5. **Integration Tests** (Step 12): End-to-end testing with all layers
 6. **Additional Endpoints** (Step 13): GET and DELETE operations
-7. **Refactoring** (Step 14): Ensure clean separation of concerns
+7. **Refactoring & Polish** (Step 14): Clean up, ensure best practices
 
 ## References
 
