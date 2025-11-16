@@ -1,7 +1,5 @@
 package com.tennis.court_booking.application.port.in;
 
-import com.tennis.court_booking.domain.entity.Booking;
-
 /**
  * Inbound port (use case interface) for booking operations.
  * This interface defines the application's core use cases from the perspective
@@ -22,9 +20,9 @@ public interface BookingUseCase {
      * 4. Publishes a booking created event
      *
      * @param command the reservation command containing date, start, and end times
-     * @return the created booking with assigned ID
+     * @return the booking response DTO with assigned ID and booking details
      * @throws com.tennis.court_booking.domain.exception.InvalidTimeSlotException if the time slot is invalid
      * @throws com.tennis.court_booking.domain.exception.BusinessException if business rules are violated
      */
-    Booking reserve(ReserveCommand command);
+    BookingResponse reserve(ReserveCommand command);
 }

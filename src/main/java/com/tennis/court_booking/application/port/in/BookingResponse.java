@@ -1,4 +1,4 @@
-package com.tennis.court_booking.application.event;
+package com.tennis.court_booking.application.port.in;
 
 import lombok.Value;
 
@@ -6,31 +6,28 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 
 /**
- * Domain event representing a successful booking creation.
- * This event is published after a booking has been successfully persisted
- * and can be consumed by other systems (e.g., via Kafka) for notifications,
- * analytics, or other downstream processing.
- *
- * Events are immutable and represent facts that have already occurred.
+ * Response object representing a successfully created booking.
+ * This DTO is returned by the use case to the adapter layer,
+ * preventing domain entities from leaking outside the application core.
  */
 @Value
-public class BookingCreatedEvent {
-    Long bookingId;
+public class BookingResponse {
+    Long id;
     LocalDate date;
     LocalTime startTime;
     LocalTime endTime;
 
     /**
-     * Creates a new booking created event.
+     * Creates a new booking response.
      *
-     * @param bookingId the unique identifier of the created booking
+     * @param id the unique identifier of the booking
      * @param date the booking date
      * @param startTime the booking start time
      * @param endTime the booking end time
      * @throws IllegalArgumentException if any parameter is null
      */
-    public BookingCreatedEvent(Long bookingId, LocalDate date, LocalTime startTime, LocalTime endTime) {
-        if (bookingId == null) {
+    public BookingResponse(Long id, LocalDate date, LocalTime startTime, LocalTime endTime) {
+        if (id == null) {
             throw new IllegalArgumentException("Booking ID cannot be null");
         }
         if (date == null) {
@@ -42,7 +39,7 @@ public class BookingCreatedEvent {
         if (endTime == null) {
             throw new IllegalArgumentException("End time cannot be null");
         }
-        this.bookingId = bookingId;
+        this.id = id;
         this.date = date;
         this.startTime = startTime;
         this.endTime = endTime;

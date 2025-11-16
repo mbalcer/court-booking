@@ -1,6 +1,6 @@
 package com.tennis.court_booking.application.port.out;
 
-import com.tennis.court_booking.application.event.BookingCreatedEvent;
+import com.tennis.court_booking.domain.event.BookingCreatedEvent;
 
 /**
  * Outbound port (event publisher interface) for publishing booking-related events.
