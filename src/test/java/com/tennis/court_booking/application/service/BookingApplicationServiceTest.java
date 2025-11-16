@@ -51,8 +51,6 @@ class BookingApplicationServiceTest {
         );
     }
 
-    // ========== Constructor Validation Tests ==========
-
     @Test
     @DisplayName("Should create application service with valid dependencies")
     void shouldCreateApplicationServiceWithValidDependencies() {
@@ -89,12 +87,9 @@ class BookingApplicationServiceTest {
         assertEquals("BookingDomainService cannot be null", exception.getMessage());
     }
 
-    // ========== Successful Reservation Flow Tests ==========
-
     @Test
     @DisplayName("Should successfully reserve a booking and return response")
     void shouldSuccessfullyReserveBookingAndReturnResponse() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         LocalTime startTime = LocalTime.of(10, 0);
         LocalTime endTime = LocalTime.of(11, 0);
@@ -110,17 +105,14 @@ class BookingApplicationServiceTest {
         when(domainService.reserve(any(TimeSlot.class), eq(existingBookings))).thenReturn(unsavedBooking);
         when(bookingRepository.save(unsavedBooking)).thenReturn(savedBooking);
 
-        // When
         BookingResponse response = applicationService.reserve(command);
 
-        // Then
         assertNotNull(response);
         assertEquals(1L, response.getId());
         assertEquals(date, response.getDate());
         assertEquals(startTime, response.getStartTime());
         assertEquals(endTime, response.getEndTime());
 
-        // Verify interactions
         verify(bookingRepository).findByDate(date);
         verify(domainService).reserve(any(TimeSlot.class), eq(existingBookings));
         verify(bookingRepository).save(unsavedBooking);
@@ -130,7 +122,6 @@ class BookingApplicationServiceTest {
     @Test
     @DisplayName("Should call domain service with correct TimeSlot")
     void shouldCallDomainServiceWithCorrectTimeSlot() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         LocalTime startTime = LocalTime.of(14, 30);
         LocalTime endTime = LocalTime.of(15, 30);
@@ -146,10 +137,8 @@ class BookingApplicationServiceTest {
         when(domainService.reserve(any(TimeSlot.class), eq(existingBookings))).thenReturn(unsavedBooking);
         when(bookingRepository.save(unsavedBooking)).thenReturn(savedBooking);
 
-        // When
         applicationService.reserve(command);
 
-        // Then
         ArgumentCaptor<TimeSlot> timeSlotCaptor = ArgumentCaptor.forClass(TimeSlot.class);
         verify(domainService).reserve(timeSlotCaptor.capture(), eq(existingBookings));
 
@@ -162,7 +151,6 @@ class BookingApplicationServiceTest {
     @Test
     @DisplayName("Should retrieve existing bookings for the requested date")
     void shouldRetrieveExistingBookingsForRequestedDate() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 20);
         LocalTime startTime = LocalTime.of(9, 0);
         LocalTime endTime = LocalTime.of(10, 0);
@@ -172,7 +160,6 @@ class BookingApplicationServiceTest {
         Booking unsavedBooking = new Booking(null, timeSlot);
         Booking savedBooking = new Booking(3L, timeSlot);
 
-        // Existing bookings on the same date
         TimeSlot existingSlot1 = new TimeSlot(date, LocalTime.of(11, 0), LocalTime.of(12, 0));
         TimeSlot existingSlot2 = new TimeSlot(date, LocalTime.of(13, 0), LocalTime.of(14, 0));
         List<Booking> existingBookings = List.of(
@@ -184,10 +171,8 @@ class BookingApplicationServiceTest {
         when(domainService.reserve(any(TimeSlot.class), eq(existingBookings))).thenReturn(unsavedBooking);
         when(bookingRepository.save(unsavedBooking)).thenReturn(savedBooking);
 
-        // When
         applicationService.reserve(command);
 
-        // Then
         verify(bookingRepository).findByDate(date);
         verify(domainService).reserve(any(TimeSlot.class), eq(existingBookings));
     }
@@ -195,7 +180,6 @@ class BookingApplicationServiceTest {
     @Test
     @DisplayName("Should save booking returned by domain service")
     void shouldSaveBookingReturnedByDomainService() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         LocalTime startTime = LocalTime.of(16, 0);
         LocalTime endTime = LocalTime.of(17, 0);
@@ -211,17 +195,14 @@ class BookingApplicationServiceTest {
         when(domainService.reserve(any(TimeSlot.class), eq(existingBookings))).thenReturn(unsavedBooking);
         when(bookingRepository.save(unsavedBooking)).thenReturn(savedBooking);
 
-        // When
         applicationService.reserve(command);
 
-        // Then
         verify(bookingRepository).save(unsavedBooking);
     }
 
     @Test
     @DisplayName("Should publish BookingCreatedEvent with correct data")
     void shouldPublishBookingCreatedEventWithCorrectData() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         LocalTime startTime = LocalTime.of(18, 0);
         LocalTime endTime = LocalTime.of(19, 0);
@@ -237,10 +218,8 @@ class BookingApplicationServiceTest {
         when(domainService.reserve(any(TimeSlot.class), eq(existingBookings))).thenReturn(unsavedBooking);
         when(bookingRepository.save(unsavedBooking)).thenReturn(savedBooking);
 
-        // When
         applicationService.reserve(command);
 
-        // Then
         ArgumentCaptor<BookingCreatedEvent> eventCaptor = ArgumentCaptor.forClass(BookingCreatedEvent.class);
         verify(eventPublisher).publish(eventCaptor.capture());
 
@@ -254,7 +233,6 @@ class BookingApplicationServiceTest {
     @Test
     @DisplayName("Should return response with ID from saved booking")
     void shouldReturnResponseWithIdFromSavedBooking() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         LocalTime startTime = LocalTime.of(20, 0);
         LocalTime endTime = LocalTime.of(21, 0);
@@ -270,14 +248,11 @@ class BookingApplicationServiceTest {
         when(domainService.reserve(any(TimeSlot.class), eq(existingBookings))).thenReturn(unsavedBooking);
         when(bookingRepository.save(unsavedBooking)).thenReturn(savedBooking);
 
-        // When
         BookingResponse response = applicationService.reserve(command);
 
-        // Then
         assertEquals(100L, response.getId());
     }
 
-    // ========== Exception Handling Tests ==========
 
     @Test
     @DisplayName("Should propagate InvalidTimeSlotException from TimeSlot constructor")
@@ -288,10 +263,8 @@ class BookingApplicationServiceTest {
         LocalTime endTime = LocalTime.of(14, 0);
         ReserveCommand command = new ReserveCommand(date, startTime, endTime);
 
-        // When & Then
         assertThrows(InvalidTimeSlotException.class, () -> applicationService.reserve(command));
 
-        // Verify no interactions with dependencies
         verifyNoInteractions(bookingRepository);
         verifyNoInteractions(domainService);
         verifyNoInteractions(eventPublisher);
@@ -300,7 +273,6 @@ class BookingApplicationServiceTest {
     @Test
     @DisplayName("Should propagate BusinessException from domain service")
     void shouldPropagateBusinessExceptionFromDomainService() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         LocalTime startTime = LocalTime.of(10, 0);
         LocalTime endTime = LocalTime.of(11, 0);
@@ -312,14 +284,12 @@ class BookingApplicationServiceTest {
         when(domainService.reserve(any(TimeSlot.class), eq(existingBookings)))
                 .thenThrow(new BusinessException("Opening hours violation"));
 
-        // When & Then
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> applicationService.reserve(command)
         );
         assertEquals("Opening hours violation", exception.getMessage());
 
-        // Verify repository was called but save and event publishing were not
         verify(bookingRepository).findByDate(date);
         verify(domainService).reserve(any(TimeSlot.class), eq(existingBookings));
         verify(bookingRepository, never()).save(any());
@@ -329,7 +299,6 @@ class BookingApplicationServiceTest {
     @Test
     @DisplayName("Should not publish event if save fails")
     void shouldNotPublishEventIfSaveFails() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         LocalTime startTime = LocalTime.of(10, 0);
         LocalTime endTime = LocalTime.of(11, 0);
@@ -344,19 +313,15 @@ class BookingApplicationServiceTest {
         when(domainService.reserve(any(TimeSlot.class), eq(existingBookings))).thenReturn(unsavedBooking);
         when(bookingRepository.save(unsavedBooking)).thenThrow(new RuntimeException("Database error"));
 
-        // When & Then
         assertThrows(RuntimeException.class, () -> applicationService.reserve(command));
 
-        // Verify event was not published
         verifyNoInteractions(eventPublisher);
     }
 
-    // ========== Integration Flow Tests ==========
 
     @Test
     @DisplayName("Should execute complete flow in correct order")
     void shouldExecuteCompleteFlowInCorrectOrder() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         LocalTime startTime = LocalTime.of(10, 0);
         LocalTime endTime = LocalTime.of(11, 0);
@@ -372,10 +337,8 @@ class BookingApplicationServiceTest {
         when(domainService.reserve(any(TimeSlot.class), eq(existingBookings))).thenReturn(unsavedBooking);
         when(bookingRepository.save(unsavedBooking)).thenReturn(savedBooking);
 
-        // When
         BookingResponse response = applicationService.reserve(command);
 
-        // Then - verify order of operations using InOrder
         var inOrder = inOrder(bookingRepository, domainService, eventPublisher);
         inOrder.verify(bookingRepository).findByDate(date);
         inOrder.verify(domainService).reserve(any(TimeSlot.class), eq(existingBookings));
@@ -389,7 +352,6 @@ class BookingApplicationServiceTest {
     @Test
     @DisplayName("Should handle empty existing bookings list")
     void shouldHandleEmptyExistingBookingsList() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         LocalTime startTime = LocalTime.of(10, 0);
         LocalTime endTime = LocalTime.of(11, 0);
@@ -405,10 +367,8 @@ class BookingApplicationServiceTest {
         when(domainService.reserve(any(TimeSlot.class), eq(emptyList))).thenReturn(unsavedBooking);
         when(bookingRepository.save(unsavedBooking)).thenReturn(savedBooking);
 
-        // When
         BookingResponse response = applicationService.reserve(command);
 
-        // Then
         assertNotNull(response);
         verify(domainService).reserve(any(TimeSlot.class), eq(emptyList));
     }

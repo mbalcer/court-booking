@@ -15,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class TimeSlotMapperTest {
 
-    // ========== Constructor Tests ==========
 
     @Test
     @DisplayName("Should not be able to instantiate TimeSlotMapper")
@@ -32,21 +31,17 @@ class TimeSlotMapperTest {
         assertEquals("This is a utility class and cannot be instantiated", exception.getCause().getMessage());
     }
 
-    // ========== Successful Mapping Tests ==========
 
     @Test
     @DisplayName("Should map ReserveCommand to TimeSlot successfully")
     void shouldMapReserveCommandToTimeSlotSuccessfully() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         LocalTime start = LocalTime.of(10, 0);
         LocalTime end = LocalTime.of(11, 0);
         ReserveCommand command = new ReserveCommand(date, start, end);
 
-        // When
         TimeSlot timeSlot = TimeSlotMapper.toTimeSlot(command);
 
-        // Then
         assertNotNull(timeSlot);
         assertEquals(date, timeSlot.getDate());
         assertEquals(start, timeSlot.getStart());
@@ -56,16 +51,13 @@ class TimeSlotMapperTest {
     @Test
     @DisplayName("Should map ReserveCommand with different times")
     void shouldMapReserveCommandWithDifferentTimes() {
-        // Given
         LocalDate date = LocalDate.of(2024, 6, 20);
         LocalTime start = LocalTime.of(14, 30);
         LocalTime end = LocalTime.of(16, 0);
         ReserveCommand command = new ReserveCommand(date, start, end);
 
-        // When
         TimeSlot timeSlot = TimeSlotMapper.toTimeSlot(command);
 
-        // Then
         assertNotNull(timeSlot);
         assertEquals(date, timeSlot.getDate());
         assertEquals(start, timeSlot.getStart());
@@ -75,16 +67,13 @@ class TimeSlotMapperTest {
     @Test
     @DisplayName("Should map ReserveCommand for early morning slot")
     void shouldMapReserveCommandForEarlyMorningSlot() {
-        // Given
         LocalDate date = LocalDate.of(2024, 12, 25);
         LocalTime start = LocalTime.of(8, 0);
         LocalTime end = LocalTime.of(9, 0);
         ReserveCommand command = new ReserveCommand(date, start, end);
 
-        // When
         TimeSlot timeSlot = TimeSlotMapper.toTimeSlot(command);
 
-        // Then
         assertNotNull(timeSlot);
         assertEquals(date, timeSlot.getDate());
         assertEquals(start, timeSlot.getStart());
@@ -94,28 +83,23 @@ class TimeSlotMapperTest {
     @Test
     @DisplayName("Should map ReserveCommand for late evening slot")
     void shouldMapReserveCommandForLateEveningSlot() {
-        // Given
         LocalDate date = LocalDate.of(2024, 3, 10);
         LocalTime start = LocalTime.of(21, 0);
         LocalTime end = LocalTime.of(22, 0);
         ReserveCommand command = new ReserveCommand(date, start, end);
 
-        // When
         TimeSlot timeSlot = TimeSlotMapper.toTimeSlot(command);
 
-        // Then
         assertNotNull(timeSlot);
         assertEquals(date, timeSlot.getDate());
         assertEquals(start, timeSlot.getStart());
         assertEquals(end, timeSlot.getEnd());
     }
 
-    // ========== Null Parameter Tests ==========
 
     @Test
     @DisplayName("Should throw exception when ReserveCommand is null")
     void shouldThrowExceptionWhenReserveCommandIsNull() {
-        // When & Then
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
                 () -> TimeSlotMapper.toTimeSlot(null)
@@ -124,7 +108,6 @@ class TimeSlotMapperTest {
         assertEquals("ReserveCommand cannot be null", exception.getMessage());
     }
 
-    // ========== Invalid Data Tests ==========
 
     @Test
     @DisplayName("Should propagate InvalidTimeSlotException when end time is before start time")
@@ -135,7 +118,6 @@ class TimeSlotMapperTest {
         LocalTime end = LocalTime.of(14, 0);
         ReserveCommand command = new ReserveCommand(date, start, end);
 
-        // When & Then
         InvalidTimeSlotException exception = assertThrows(
                 InvalidTimeSlotException.class,
                 () -> TimeSlotMapper.toTimeSlot(command)
@@ -152,7 +134,6 @@ class TimeSlotMapperTest {
         LocalTime time = LocalTime.of(10, 0);
         ReserveCommand command = new ReserveCommand(date, time, time);
 
-        // When & Then
         InvalidTimeSlotException exception = assertThrows(
                 InvalidTimeSlotException.class,
                 () -> TimeSlotMapper.toTimeSlot(command)
@@ -161,12 +142,10 @@ class TimeSlotMapperTest {
         assertTrue(exception.getMessage().contains("End time must be after start time"));
     }
 
-    // ========== Multiple Mappings Tests ==========
 
     @Test
     @DisplayName("Should create independent TimeSlot instances for different commands")
     void shouldCreateIndependentTimeSlotInstancesForDifferentCommands() {
-        // Given
         ReserveCommand command1 = new ReserveCommand(
                 LocalDate.of(2024, 1, 15),
                 LocalTime.of(10, 0),
@@ -178,11 +157,9 @@ class TimeSlotMapperTest {
                 LocalTime.of(15, 0)
         );
 
-        // When
         TimeSlot timeSlot1 = TimeSlotMapper.toTimeSlot(command1);
         TimeSlot timeSlot2 = TimeSlotMapper.toTimeSlot(command2);
 
-        // Then
         assertNotNull(timeSlot1);
         assertNotNull(timeSlot2);
         assertNotEquals(timeSlot1, timeSlot2);
@@ -193,7 +170,6 @@ class TimeSlotMapperTest {
     @Test
     @DisplayName("Should create equal TimeSlot instances for identical commands")
     void shouldCreateEqualTimeSlotInstancesForIdenticalCommands() {
-        // Given
         LocalDate date = LocalDate.of(2024, 1, 15);
         LocalTime start = LocalTime.of(10, 0);
         LocalTime end = LocalTime.of(11, 0);
@@ -201,11 +177,9 @@ class TimeSlotMapperTest {
         ReserveCommand command1 = new ReserveCommand(date, start, end);
         ReserveCommand command2 = new ReserveCommand(date, start, end);
 
-        // When
         TimeSlot timeSlot1 = TimeSlotMapper.toTimeSlot(command1);
         TimeSlot timeSlot2 = TimeSlotMapper.toTimeSlot(command2);
 
-        // Then
         assertNotNull(timeSlot1);
         assertNotNull(timeSlot2);
         assertEquals(timeSlot1, timeSlot2);

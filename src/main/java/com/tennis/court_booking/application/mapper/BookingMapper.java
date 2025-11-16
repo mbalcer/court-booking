@@ -5,34 +5,19 @@ import com.tennis.court_booking.domain.entity.Booking;
 import com.tennis.court_booking.domain.event.BookingCreatedEvent;
 
 /**
- * Mapper for converting Booking domain entity to DTOs and events.
- * This mapper is part of the application layer and handles the translation
- * between domain objects and application-layer DTOs/events.
- *
- * Responsibilities:
- * - Convert Booking entity to BookingResponse DTO (for API responses)
- * - Convert Booking entity to BookingCreatedEvent (for event publishing)
- *
- * This prevents domain entities from leaking to the adapter layer and
- * maintains clean boundaries in the hexagonal architecture.
+ * Mapper for converting Booking entity to DTOs and events.
  */
 public class BookingMapper {
 
-    /**
-     * Private constructor to prevent instantiation.
-     * This is a utility class with only static methods.
-     */
     private BookingMapper() {
         throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
     }
 
     /**
-     * Converts a Booking domain entity to a BookingResponse DTO.
-     * This DTO is used by inbound adapters (e.g., REST controllers) to return
-     * booking information to clients.
+     * Converts a Booking to BookingResponse DTO.
      *
-     * @param booking the booking entity to convert
-     * @return a BookingResponse DTO containing the booking data
+     * @param booking the booking entity
+     * @return a BookingResponse DTO
      * @throws IllegalArgumentException if booking is null
      */
     public static BookingResponse toBookingResponse(Booking booking) {
@@ -49,12 +34,10 @@ public class BookingMapper {
     }
 
     /**
-     * Converts a Booking domain entity to a BookingCreatedEvent.
-     * This event is published to external systems (e.g., message queues)
-     * to notify them of the new booking.
+     * Converts a Booking to BookingCreatedEvent.
      *
-     * @param booking the booking entity to convert
-     * @return a BookingCreatedEvent containing the booking data
+     * @param booking the booking entity
+     * @return a BookingCreatedEvent
      * @throws IllegalArgumentException if booking is null
      */
     public static BookingCreatedEvent toBookingCreatedEvent(Booking booking) {
