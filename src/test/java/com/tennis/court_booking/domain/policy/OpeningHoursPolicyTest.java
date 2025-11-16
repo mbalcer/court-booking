@@ -171,7 +171,7 @@ class OpeningHoursPolicyTest {
             BusinessException.class,
             () -> policy.validate(timeSlot)
         );
-        assertTrue(exception.getMessage().contains("cannot start before opening time"));
+        assertTrue(exception.getMessage().contains("cannot end after closing time"));
     }
 
     @Test
