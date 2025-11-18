@@ -66,21 +66,21 @@ java -jar build/libs/court-booking-0.0.1-SNAPSHOT.jar
 This project follows **hexagonal architecture** with strict dependency rules: dependencies flow inward toward the domain core. The domain layer is completely framework-agnostic.
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   ADAPTERS LAYER                        │
-│  REST ✓ │ JPA Repositories ✓ COMPLETE │ Kafka Publishers│
-├─────────────────────────────────────────────────────────┤
-│          APPLICATION LAYER ✓ COMPLETE                   │
-│        Use Cases │ Application Services │ Ports         │
-├─────────────────────────────────────────────────────────┤
-│              DOMAIN LAYER (CORE) ✓ COMPLETE             │
-│  Entities │ Value Objects │ Services │ Policies │ Excp. │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      ADAPTERS LAYER ✓ COMPLETE                  │
+│  REST ✓ │ JPA Repositories ✓ │ Kafka Event Publishers ✓       │
+├─────────────────────────────────────────────────────────────────┤
+│              APPLICATION LAYER ✓ COMPLETE                       │
+│            Use Cases │ Application Services │ Ports             │
+├─────────────────────────────────────────────────────────────────┤
+│                  DOMAIN LAYER (CORE) ✓ COMPLETE                 │
+│      Entities │ Value Objects │ Services │ Policies │ Excp.     │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Current Implementation Status
 
-**Completed** (Steps 1-9):
+**Completed** (Steps 1-10):
 - **Domain Layer** (Steps 1-5):
   - Domain entities (`Booking`)
   - Value objects (`TimeSlot`)
@@ -99,7 +99,7 @@ This project follows **hexagonal architecture** with strict dependency rules: de
     - `TimeSlotMapper` for command-to-domain conversions
     - `BookingMapper` for domain-to-DTO conversions
 
-- **Adapter Layer** (Steps 8-9):
+- **Adapter Layer** (Steps 8-10):
   - **REST Adapter (Inbound)** (Step 8):
     - `BookingController` with POST `/api/bookings` endpoint
     - REST DTOs: `ReserveBookingRequest`, `ReserveBookingResponse`, `ErrorResponse`
@@ -109,9 +109,13 @@ This project follows **hexagonal architecture** with strict dependency rules: de
     - `BookingJpaRepository` (Spring Data JPA interface)
     - `BookingPersistenceMapper` for domain/JPA entity conversions
     - `BookingRepositoryAdapter` implementing `BookingRepository` port
+  - **Event Adapter (Outbound)** (Step 10):
+    - `BookingEventPublisherAdapter` implementing `BookingEventPublisher` port
+    - `BookingCreatedKafkaEvent` (Kafka-specific DTO)
+    - `BookingEventMapper` for domain event to Kafka DTO conversions
+    - Spring Kafka integration for async event publishing
 
-**To Be Implemented** (Steps 10+):
-- Event publishing adapters (Kafka)
+**To Be Implemented** (Steps 11+):
 - Configuration and wiring
 - Integration tests
 - Additional REST endpoints (GET, DELETE)
@@ -162,14 +166,20 @@ src/main/java/com/tennis/court_booking/
     │       └── exception/
     │           └── GlobalExceptionHandler.java  # Global REST exception handler
     └── out/                           # Outbound adapters (driven)
-        └── persistence/               # JPA persistence adapter
-            ├── BookingRepositoryAdapter.java    # Implements BookingRepository port
-            ├── entity/
-            │   └── BookingJpaEntity.java        # JPA entity for database
-            ├── repository/
-            │   └── BookingJpaRepository.java    # Spring Data JPA repository
+        ├── persistence/               # JPA persistence adapter
+        │   ├── BookingRepositoryAdapter.java    # Implements BookingRepository port
+        │   ├── entity/
+        │   │   └── BookingJpaEntity.java        # JPA entity for database
+        │   ├── repository/
+        │   │   └── BookingJpaRepository.java    # Spring Data JPA repository
+        │   └── mapper/
+        │       └── BookingPersistenceMapper.java  # Maps between domain and JPA entities
+        └── event/                     # Kafka event publishing adapter
+            ├── BookingEventPublisherAdapter.java  # Implements BookingEventPublisher port
+            ├── dto/
+            │   └── BookingCreatedKafkaEvent.java  # Kafka-specific event DTO
             └── mapper/
-                └── BookingPersistenceMapper.java  # Maps between domain and JPA entities
+                └── BookingEventMapper.java        # Maps domain events to Kafka DTOs
 ```
 
 ### Domain Model Principles
@@ -556,6 +566,87 @@ public class BookingApplicationService implements BookingUseCase {
 }
 ```
 
+### Event Adapter (Outbound Adapter)
+
+The event adapter is the **outbound (driven) adapter** that implements the `BookingEventPublisher` port defined in the application layer. It translates domain events into Kafka-specific messages and publishes them asynchronously using Spring Kafka.
+
+#### Kafka Event DTO
+
+**BookingCreatedKafkaEvent**:
+- Kafka-specific DTO for serialization to JSON
+- Contains: `bookingId`, `date`, `startTime`, `endTime`
+- Uses Jackson annotations for JSON serialization (`@JsonProperty`, `@JsonFormat`)
+- Separate from domain event to maintain infrastructure independence
+- Allows message format evolution without affecting domain layer
+- Uses snake_case field names for external API consistency
+
+**Key Design Principles**:
+- **Separation of Concerns**: Domain events remain pure; Kafka concerns isolated in adapter
+- **Versioning**: DTO can evolve independently for backward/forward compatibility
+- **No Framework Pollution**: Domain layer has no Kafka or Jackson dependencies
+
+#### Event Mapper
+
+**BookingEventMapper**:
+- Static utility class for converting domain events to Kafka DTOs
+- **Domain to Kafka**: `toKafkaEvent(BookingCreatedEvent)` - converts domain event to Kafka DTO
+- Private constructor throws `UnsupportedOperationException` (utility class pattern)
+- Validates all inputs (null checks)
+- Simple structural conversion with no business logic
+
+#### Event Publisher Adapter
+
+**BookingEventPublisherAdapter**:
+- Implements the `BookingEventPublisher` port from the application layer
+- Marked with `@Component` for Spring dependency injection
+- Uses Spring `KafkaTemplate` to publish messages asynchronously
+- Uses booking ID as message key for consistent partitioning
+- Configurable topic name via `@Value` with default fallback
+- Logs success and failure outcomes (non-blocking)
+
+**Publishing Flow**:
+1. Validates input event (null check)
+2. Converts domain event to Kafka DTO using `BookingEventMapper`
+3. Publishes to Kafka topic asynchronously with booking ID as key
+4. Handles success/failure callbacks with appropriate logging
+5. Does not throw exceptions on publish failure (loose coupling)
+
+**Configuration**:
+- Topic name: `kafka.topic.booking-created` (default: `booking-created`)
+- Async publishing with `CompletableFuture` callbacks
+- Message key based on booking ID for partitioning
+
+**Key Design Principles**:
+- **Hexagonal Architecture**: Implements port interface, keeping domain layer independent
+- **Separation of Concerns**: Pure adapter with no business logic
+- **Dependency Inversion**: Application layer depends on port interface, not on this adapter
+- **Async Publishing**: Non-blocking event publishing with callbacks
+- **Observability**: Comprehensive logging for monitoring and troubleshooting
+- **Loose Coupling**: Failures don't propagate to prevent cascade failures
+
+**Usage Example**:
+```java
+// Injected by Spring
+@Component
+public class BookingApplicationService implements BookingUseCase {
+    private final BookingEventPublisher eventPublisher; // Interface, not concrete class
+
+    public BookingApplicationService(..., BookingEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher; // Spring injects BookingEventPublisherAdapter
+    }
+
+    public BookingResponse reserve(ReserveCommand command) {
+        // ... domain logic and persistence ...
+
+        // Publish event asynchronously
+        BookingCreatedEvent event = BookingMapper.toBookingCreatedEvent(savedBooking);
+        eventPublisher.publish(event);
+
+        return BookingMapper.toBookingResponse(savedBooking);
+    }
+}
+```
+
 ### Testing Approach
 
 **Unit Tests** (no Spring context required):
@@ -581,6 +672,9 @@ public class BookingApplicationService implements BookingUseCase {
   - `BookingJpaEntityTest`: 12 tests (entity creation with/without ID, equality based on ID, hashCode, toString)
   - `BookingPersistenceMapperTest`: 14 tests (bidirectional mapping, null handling, invalid data propagation, round-trip consistency)
   - `BookingRepositoryAdapterTest`: 16 tests with Mockito (constructor validation, all CRUD operations, null parameter validation, proper delegation to JPA repository)
+- **Adapter Layer (Outbound - Event)**:
+  - `BookingEventMapperTest`: 10 tests (successful conversion, null handling, data preservation, utility class instantiation)
+  - `BookingEventPublisherAdapterTest`: 11 tests with Mockito (constructor validation, successful publishing, correct topic/key/value, multiple publishes, failure handling)
 
 **Running Specific Tests**:
 ```bash
@@ -609,11 +703,16 @@ public class BookingApplicationService implements BookingUseCase {
 # Run persistence adapter tests
 ./gradlew test --tests "com.tennis.court_booking.adapter.out.persistence.*"
 
+# Run event adapter tests
+./gradlew test --tests "com.tennis.court_booking.adapter.out.event.*"
+
 # Run a specific test class
 ./gradlew test --tests com.tennis.court_booking.domain.valueobject.TimeSlotTest
 ./gradlew test --tests com.tennis.court_booking.application.service.BookingApplicationServiceTest
 ./gradlew test --tests com.tennis.court_booking.adapter.in.web.controller.BookingControllerTest
 ./gradlew test --tests com.tennis.court_booking.adapter.out.persistence.BookingRepositoryAdapterTest
+./gradlew test --tests com.tennis.court_booking.adapter.out.event.BookingEventPublisherAdapterTest
+./gradlew test --tests com.tennis.court_booking.adapter.out.event.mapper.BookingEventMapperTest
 ```
 
 ## Dependencies
@@ -622,10 +721,14 @@ public class BookingApplicationService implements BookingUseCase {
 - Spring Boot 3.5.7
 - Spring Web (REST APIs)
 - Spring Data JPA (persistence)
+- Spring Kafka (event publishing)
 - Spring Validation (bean validation)
 
 **Database**:
 - H2 (in-memory database for development)
+
+**Messaging**:
+- Spring Kafka (asynchronous event publishing to Kafka topics)
 
 **Utilities**:
 - Lombok (reduces boilerplate: `@Value`, `@Getter`, `@EqualsAndHashCode`)
@@ -634,6 +737,7 @@ public class BookingApplicationService implements BookingUseCase {
 - JUnit 5 (Jupiter)
 - Mockito (mocking framework for unit tests)
 - Spring Boot Test (integration tests, when implemented)
+- Spring Kafka Test (Kafka testing utilities)
 
 ## Code Conventions
 
@@ -742,11 +846,11 @@ public class BookingApplicationService implements BookingUseCase {
 
 ## Next Steps in Implementation
 
-The domain layer (Steps 1-5), application layer (Steps 6-7), REST adapter (Step 8), and persistence adapter (Step 9) are now complete. The next phases are:
+The domain layer (Steps 1-5), application layer (Steps 6-7), and all adapters (Steps 8-10) are now complete. The next phases are:
 
 1. ~~**REST Adapter** (Step 8): Controllers and DTOs for HTTP API~~ ✓ COMPLETE
 2. ~~**Persistence Adapter** (Step 9): JPA entities and repository implementations~~ ✓ COMPLETE
-3. **Event Adapter** (Step 10): Kafka event publishing
+3. ~~**Event Adapter** (Step 10): Kafka event publishing~~ ✓ COMPLETE
 4. **Configuration** (Step 11): Wire dependencies with Spring `@Configuration`
 5. **Integration Tests** (Step 12): End-to-end testing with all layers
 6. **Additional Endpoints** (Step 13): GET and DELETE operations
