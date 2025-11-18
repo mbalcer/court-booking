@@ -69,18 +69,22 @@ This project follows **hexagonal architecture** with strict dependency rules: de
 ┌─────────────────────────────────────────────────────────┐
 │                   ADAPTERS LAYER                        │
 │  REST ✓ COMPLETE │ JPA Repositories │ Kafka Publishers │
+│  In-Memory Repo ✓ │ Logging Events ✓                   │
 ├─────────────────────────────────────────────────────────┤
 │          APPLICATION LAYER ✓ COMPLETE                   │
 │        Use Cases │ Application Services │ Ports         │
 ├─────────────────────────────────────────────────────────┤
 │              DOMAIN LAYER (CORE) ✓ COMPLETE             │
 │  Entities │ Value Objects │ Services │ Policies │ Excp. │
+├─────────────────────────────────────────────────────────┤
+│              CONFIGURATION ✓ COMPLETE                   │
+│        Spring Wiring │ Bean Definitions                 │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ### Current Implementation Status
 
-**Completed** (Steps 1-8):
+**Completed** (Steps 1-11):
 - **Domain Layer** (Steps 1-5):
   - Domain entities (`Booking`)
   - Value objects (`TimeSlot`)
@@ -100,23 +104,33 @@ This project follows **hexagonal architecture** with strict dependency rules: de
     - `BookingMapper` for domain-to-DTO conversions
 
 - **Adapter Layer** (Step 8):
-  - **REST Adapter**:
+  - **REST Adapter (Inbound)**:
     - `BookingController` with POST `/api/bookings` endpoint
     - REST DTOs: `ReserveBookingRequest`, `ReserveBookingResponse`, `ErrorResponse`
     - `GlobalExceptionHandler` for centralized error handling
+  - **Stub Adapters (Outbound)** - Temporary implementations for development:
+    - `InMemoryBookingRepository`: Thread-safe in-memory repository implementation
+    - `LoggingEventPublisher`: Logs events instead of publishing to message broker
 
-**To Be Implemented** (Steps 9+):
-- Persistence adapters (JPA entities, Spring Data repositories)
-- Event publishing adapters (Kafka)
-- Configuration and wiring
-- Integration tests
-- Additional REST endpoints (GET, DELETE)
+- **Configuration Layer** (Step 11):
+  - `BookingConfiguration`: Spring configuration class wiring all dependencies
+  - Configures business policies with operating hours (8:00-20:00)
+  - Wires domain service, application service, and stub adapters
+  - Enables dependency injection for REST controllers
+
+**To Be Implemented** (Steps 9-10, 12+):
+- Persistence adapters (JPA entities, Spring Data repositories) - Step 9
+- Event publishing adapters (Kafka) - Step 10
+- Integration tests - Step 12
+- Additional REST endpoints (GET, DELETE) - Step 13
 
 ### Package Structure
 
 ```
 src/main/java/com/tennis/court_booking/
 ├── CourtBookingApplication.java       # Spring Boot entry point
+├── config/                            # Spring configuration
+│   └── BookingConfiguration.java      # Wires all dependencies with @Configuration
 ├── domain/                            # Pure domain logic (no Spring dependencies)
 │   ├── entity/
 │   │   └── Booking.java               # Aggregate root with identity-based equality
@@ -147,16 +161,21 @@ src/main/java/com/tennis/court_booking/
 │   └── service/
 │       └── BookingApplicationService.java  # Use case implementation
 └── adapter/                           # Adapter layer (infrastructure implementations)
-    └── in/                            # Inbound adapters (driving)
-        └── web/                       # REST API adapter
-            ├── controller/
-            │   └── BookingController.java  # REST controller for bookings
-            ├── dto/
-            │   ├── ReserveBookingRequest.java   # REST request DTO
-            │   ├── ReserveBookingResponse.java  # REST response DTO
-            │   └── ErrorResponse.java           # Error response DTO
-            └── exception/
-                └── GlobalExceptionHandler.java  # Global REST exception handler
+    ├── in/                            # Inbound adapters (driving)
+    │   └── web/                       # REST API adapter
+    │       ├── controller/
+    │       │   └── BookingController.java  # REST controller for bookings
+    │       ├── dto/
+    │       │   ├── ReserveBookingRequest.java   # REST request DTO
+    │       │   ├── ReserveBookingResponse.java  # REST response DTO
+    │       │   └── ErrorResponse.java           # Error response DTO
+    │       └── exception/
+    │           └── GlobalExceptionHandler.java  # Global REST exception handler
+    └── out/                           # Outbound adapters (driven)
+        ├── persistence/               # Persistence adapters
+        │   └── InMemoryBookingRepository.java  # In-memory stub (temporary)
+        └── event/                     # Event publishing adapters
+            └── LoggingEventPublisher.java      # Logging stub (temporary)
 ```
 
 ### Domain Model Principles
@@ -450,6 +469,72 @@ curl -X POST http://localhost:8080/api/bookings \
 }
 ```
 
+### Configuration Layer (Spring Wiring)
+
+The configuration layer is responsible for wiring all dependencies together using Spring's dependency injection. This follows the **Inversion of Control (IoC)** principle and enables the hexagonal architecture to function as a cohesive application.
+
+#### BookingConfiguration
+
+**Purpose**: Central configuration class that defines Spring beans and wires dependencies.
+
+**Key Beans**:
+- `openingHoursPolicy()`: Configures court operating hours (8:00 AM - 8:00 PM)
+- `overlappingReservationsPolicy()`: Configures overlap detection policy
+- `bookingDomainService()`: Wires domain service with business policies
+- `bookingRepository()`: Provides repository implementation (currently in-memory stub)
+- `bookingEventPublisher()`: Provides event publisher implementation (currently logging stub)
+- `bookingUseCase()`: Wires application service with all dependencies
+
+**Configuration Principles**:
+- **Constructor Injection**: All beans use constructor-based dependency injection
+- **Interface-Based Wiring**: Beans are wired through interfaces (ports), not concrete types
+- **Explicit Configuration**: Uses `@Bean` methods for clear, explicit bean definitions
+- **Separation of Concerns**: Configuration is separated from business logic
+- **Testability**: Constructor injection makes all components easily testable
+
+**Stub Implementations** (Temporary):
+
+Until Steps 9-10 are implemented, the configuration uses stub implementations for outbound adapters:
+
+1. **InMemoryBookingRepository**:
+   - Thread-safe in-memory storage using `ConcurrentHashMap`
+   - Auto-incrementing ID generation using `AtomicLong`
+   - Implements all repository operations (save, findById, findByDate, delete)
+   - Provides utility methods for testing (clear, count)
+   - Will be replaced with JPA repository adapter in Step 9
+
+2. **LoggingEventPublisher**:
+   - Logs events using SLF4J instead of publishing to message broker
+   - Useful for development and debugging
+   - Shows event flow without requiring external infrastructure
+   - Will be replaced with Kafka publisher adapter in Step 10
+
+**Dependency Flow**:
+```
+BookingController (REST)
+    ↓ depends on
+BookingUseCase (interface)
+    ↑ implemented by
+BookingApplicationService
+    ↓ depends on
+    ├── BookingRepository (interface) ← InMemoryBookingRepository
+    ├── BookingEventPublisher (interface) ← LoggingEventPublisher
+    └── BookingDomainService
+        ↓ depends on
+        ├── OpeningHoursPolicy
+        └── OverlappingReservationsPolicy
+```
+
+**Benefits**:
+- **Loose Coupling**: Components depend on interfaces, not implementations
+- **Easy Testing**: Mock implementations can easily replace real ones
+- **Flexibility**: Implementations can be swapped without changing business logic
+- **Clear Architecture**: Configuration makes dependency graph explicit
+- **Progressive Development**: Stub implementations allow incremental feature development
+
+**Usage**:
+The application can now be started with `./gradlew bootRun` and will have a fully functional REST API at `http://localhost:8080/api/bookings`, backed by in-memory storage and event logging.
+
 ### Testing Approach
 
 **Unit Tests** (no Spring context required):
@@ -628,15 +713,24 @@ curl -X POST http://localhost:8080/api/bookings \
 
 ## Next Steps in Implementation
 
-The domain layer (Steps 1-5), application layer (Steps 6-7), and REST adapter (Step 8) are now complete. The next phases are:
+The domain layer (Steps 1-5), application layer (Steps 6-7), REST adapter (Step 8), and configuration (Step 11) are now complete. The application is fully functional with in-memory storage and event logging. The next phases are:
 
 1. ~~**REST Adapter** (Step 8): Controllers and DTOs for HTTP API~~ ✓ COMPLETE
 2. **Persistence Adapter** (Step 9): JPA entities and repository implementations
 3. **Event Adapter** (Step 10): Kafka event publishing
-4. **Configuration** (Step 11): Wire dependencies with Spring `@Configuration`
+4. ~~**Configuration** (Step 11): Wire dependencies with Spring `@Configuration`~~ ✓ COMPLETE
 5. **Integration Tests** (Step 12): End-to-end testing with all layers
 6. **Additional Endpoints** (Step 13): GET and DELETE operations
 7. **Refactoring & Polish** (Step 14): Clean up, ensure best practices
+
+**Current Application State**:
+- ✅ Fully functional REST API at `/api/bookings`
+- ✅ All business logic implemented and tested
+- ✅ Dependency injection configured
+- ✅ In-memory storage (thread-safe)
+- ✅ Event logging for debugging
+- ⏳ Persistence to database (Step 9)
+- ⏳ Event publishing to Kafka (Step 10)
 
 ## References
 
