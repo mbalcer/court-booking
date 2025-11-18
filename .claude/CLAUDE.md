@@ -68,7 +68,7 @@ This project follows **hexagonal architecture** with strict dependency rules: de
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                   ADAPTERS LAYER                        │
-│  REST ✓ COMPLETE │ JPA Repositories │ Kafka Publishers │
+│  REST ✓ │ JPA Repositories ✓ COMPLETE │ Kafka Publishers│
 ├─────────────────────────────────────────────────────────┤
 │          APPLICATION LAYER ✓ COMPLETE                   │
 │        Use Cases │ Application Services │ Ports         │
@@ -80,7 +80,7 @@ This project follows **hexagonal architecture** with strict dependency rules: de
 
 ### Current Implementation Status
 
-**Completed** (Steps 1-8):
+**Completed** (Steps 1-9):
 - **Domain Layer** (Steps 1-5):
   - Domain entities (`Booking`)
   - Value objects (`TimeSlot`)
@@ -99,14 +99,18 @@ This project follows **hexagonal architecture** with strict dependency rules: de
     - `TimeSlotMapper` for command-to-domain conversions
     - `BookingMapper` for domain-to-DTO conversions
 
-- **Adapter Layer** (Step 8):
-  - **REST Adapter**:
+- **Adapter Layer** (Steps 8-9):
+  - **REST Adapter (Inbound)** (Step 8):
     - `BookingController` with POST `/api/bookings` endpoint
     - REST DTOs: `ReserveBookingRequest`, `ReserveBookingResponse`, `ErrorResponse`
     - `GlobalExceptionHandler` for centralized error handling
+  - **Persistence Adapter (Outbound)** (Step 9):
+    - `BookingJpaEntity` for database persistence
+    - `BookingJpaRepository` (Spring Data JPA interface)
+    - `BookingPersistenceMapper` for domain/JPA entity conversions
+    - `BookingRepositoryAdapter` implementing `BookingRepository` port
 
-**To Be Implemented** (Steps 9+):
-- Persistence adapters (JPA entities, Spring Data repositories)
+**To Be Implemented** (Steps 10+):
 - Event publishing adapters (Kafka)
 - Configuration and wiring
 - Integration tests
@@ -147,16 +151,25 @@ src/main/java/com/tennis/court_booking/
 │   └── service/
 │       └── BookingApplicationService.java  # Use case implementation
 └── adapter/                           # Adapter layer (infrastructure implementations)
-    └── in/                            # Inbound adapters (driving)
-        └── web/                       # REST API adapter
-            ├── controller/
-            │   └── BookingController.java  # REST controller for bookings
-            ├── dto/
-            │   ├── ReserveBookingRequest.java   # REST request DTO
-            │   ├── ReserveBookingResponse.java  # REST response DTO
-            │   └── ErrorResponse.java           # Error response DTO
-            └── exception/
-                └── GlobalExceptionHandler.java  # Global REST exception handler
+    ├── in/                            # Inbound adapters (driving)
+    │   └── web/                       # REST API adapter
+    │       ├── controller/
+    │       │   └── BookingController.java  # REST controller for bookings
+    │       ├── dto/
+    │       │   ├── ReserveBookingRequest.java   # REST request DTO
+    │       │   ├── ReserveBookingResponse.java  # REST response DTO
+    │       │   └── ErrorResponse.java           # Error response DTO
+    │       └── exception/
+    │           └── GlobalExceptionHandler.java  # Global REST exception handler
+    └── out/                           # Outbound adapters (driven)
+        └── persistence/               # JPA persistence adapter
+            ├── BookingRepositoryAdapter.java    # Implements BookingRepository port
+            ├── entity/
+            │   └── BookingJpaEntity.java        # JPA entity for database
+            ├── repository/
+            │   └── BookingJpaRepository.java    # Spring Data JPA repository
+            └── mapper/
+                └── BookingPersistenceMapper.java  # Maps between domain and JPA entities
 ```
 
 ### Domain Model Principles
@@ -450,6 +463,99 @@ curl -X POST http://localhost:8080/api/bookings \
 }
 ```
 
+### Persistence Adapter (Outbound Adapter)
+
+The persistence adapter is the **outbound (driven) adapter** that implements the `BookingRepository` port defined in the application layer. It translates between domain entities and JPA entities, providing database persistence using Spring Data JPA.
+
+#### JPA Entity
+
+**BookingJpaEntity**:
+- JPA entity for persisting bookings to the database
+- Maps to the `bookings` table
+- Contains embedded time slot data (date, startTime, endTime) rather than a separate table
+- Uses auto-generated ID with `@GeneratedValue(strategy = GenerationType.IDENTITY)`
+- Separate from domain entity to maintain hexagonal architecture boundaries
+- Identity-based equality (two entities are equal if they have the same ID)
+- Provides constructor for creating new entities without ID (for inserts)
+
+**Fields**:
+- `id`: Primary key (auto-generated)
+- `date`: Booking date (`@Column(name = "booking_date", nullable = false)`)
+- `startTime`: Start time (`@Column(name = "start_time", nullable = false)`)
+- `endTime`: End time (`@Column(name = "end_time", nullable = false)`)
+
+#### Spring Data JPA Repository
+
+**BookingJpaRepository**:
+- Extends `JpaRepository<BookingJpaEntity, Long>`
+- Provides standard CRUD operations automatically
+- Custom query method: `findByDate(LocalDate date)` - Spring Data JPA implements this automatically based on naming convention
+- Marked with `@Repository` annotation
+- This is a Spring-specific infrastructure interface
+
+#### Persistence Mapper
+
+**BookingPersistenceMapper**:
+- Static utility class for converting between domain and JPA entities
+- **Domain to JPA**: `toJpaEntity(Booking)` - converts domain `Booking` to `BookingJpaEntity`
+  - Handles both new bookings (null ID) and existing bookings (with ID)
+  - Extracts time slot data into separate JPA entity fields
+- **JPA to Domain**: `toDomainEntity(BookingJpaEntity)` - converts `BookingJpaEntity` to domain `Booking`
+  - Reconstructs `TimeSlot` value object from JPA entity fields
+  - Delegates validation to `TimeSlot` constructor
+- Private constructor throws `UnsupportedOperationException` (utility class pattern)
+- Validates all inputs (null checks)
+- Propagates domain exceptions (e.g., `InvalidTimeSlotException` from `TimeSlot` constructor)
+
+#### Repository Adapter
+
+**BookingRepositoryAdapter**:
+- Implements the `BookingRepository` port from the application layer
+- Marked with `@Component` for Spring dependency injection
+- Delegates all persistence operations to `BookingJpaRepository`
+- Uses `BookingPersistenceMapper` to convert between domain and JPA entities
+- Maintains separation between domain and infrastructure concerns
+
+**Implemented Operations**:
+- `findByDate(LocalDate)`: Retrieves all bookings for a specific date, converts to domain entities
+- `save(Booking)`: Persists a booking, returns saved booking with assigned ID
+- `findById(Long)`: Retrieves a single booking by ID, returns `Optional<Booking>`
+- `delete(Long)`: Deletes a booking by ID
+
+**Validation**:
+- All methods validate parameters (null checks)
+- Throws `IllegalArgumentException` for invalid inputs
+- Delegates domain validation to mapper and domain constructors
+
+**Key Design Principles**:
+- **Hexagonal Architecture**: Implements port interface, keeping domain layer independent
+- **Separation of Concerns**: Pure adapter with no business logic
+- **Dependency Inversion**: Application layer depends on port interface, not on this adapter
+- **DTO Translation**: Converts between domain and persistence representations
+- **Single Responsibility**: Only handles persistence concerns
+- **Framework Isolation**: Domain entities remain pure Java; JPA annotations only in adapter layer
+
+**Usage Example**:
+```java
+// Injected by Spring
+@Component
+public class BookingApplicationService implements BookingUseCase {
+    private final BookingRepository bookingRepository; // Interface, not concrete class
+
+    public BookingApplicationService(BookingRepository bookingRepository, ...) {
+        this.bookingRepository = bookingRepository; // Spring injects BookingRepositoryAdapter
+    }
+
+    public BookingResponse reserve(ReserveCommand command) {
+        // Application service uses the port interface
+        List<Booking> existingBookings = bookingRepository.findByDate(command.date());
+        // ... domain logic ...
+        Booking savedBooking = bookingRepository.save(newBooking);
+        // ...
+    }
+}
+```
+
 ### Testing Approach
 
 **Unit Tests** (no Spring context required):
@@ -468,9 +574,13 @@ curl -X POST http://localhost:8080/api/bookings \
   - `BookingApplicationServiceTest`: 16 tests with Mockito (constructor validation, successful flow, exception handling, mocked repository & event publisher)
   - `TimeSlotMapperTest`: 10 tests (successful mapping, null handling, invalid data propagation, consistency)
   - `BookingMapperTest`: 13 tests (response mapping, event mapping, null handling, consistency)
-- **Adapter Layer (REST)**:
+- **Adapter Layer (Inbound - REST)**:
   - `BookingControllerTest`: 8 tests with MockMvc (constructor validation, successful booking creation, error handling for all exception types, request/response mapping)
   - `GlobalExceptionHandlerTest`: 8 tests (exception handling, error response structure, message preservation, timestamp validation)
+- **Adapter Layer (Outbound - Persistence)**:
+  - `BookingJpaEntityTest`: 12 tests (entity creation with/without ID, equality based on ID, hashCode, toString)
+  - `BookingPersistenceMapperTest`: 14 tests (bidirectional mapping, null handling, invalid data propagation, round-trip consistency)
+  - `BookingRepositoryAdapterTest`: 16 tests with Mockito (constructor validation, all CRUD operations, null parameter validation, proper delegation to JPA repository)
 
 **Running Specific Tests**:
 ```bash
@@ -496,10 +606,14 @@ curl -X POST http://localhost:8080/api/bookings \
 # Run REST controller tests
 ./gradlew test --tests "com.tennis.court_booking.adapter.in.web.controller.*"
 
+# Run persistence adapter tests
+./gradlew test --tests "com.tennis.court_booking.adapter.out.persistence.*"
+
 # Run a specific test class
 ./gradlew test --tests com.tennis.court_booking.domain.valueobject.TimeSlotTest
 ./gradlew test --tests com.tennis.court_booking.application.service.BookingApplicationServiceTest
 ./gradlew test --tests com.tennis.court_booking.adapter.in.web.controller.BookingControllerTest
+./gradlew test --tests com.tennis.court_booking.adapter.out.persistence.BookingRepositoryAdapterTest
 ```
 
 ## Dependencies
@@ -628,10 +742,10 @@ curl -X POST http://localhost:8080/api/bookings \
 
 ## Next Steps in Implementation
 
-The domain layer (Steps 1-5), application layer (Steps 6-7), and REST adapter (Step 8) are now complete. The next phases are:
+The domain layer (Steps 1-5), application layer (Steps 6-7), REST adapter (Step 8), and persistence adapter (Step 9) are now complete. The next phases are:
 
 1. ~~**REST Adapter** (Step 8): Controllers and DTOs for HTTP API~~ ✓ COMPLETE
-2. **Persistence Adapter** (Step 9): JPA entities and repository implementations
+2. ~~**Persistence Adapter** (Step 9): JPA entities and repository implementations~~ ✓ COMPLETE
 3. **Event Adapter** (Step 10): Kafka event publishing
 4. **Configuration** (Step 11): Wire dependencies with Spring `@Configuration`
 5. **Integration Tests** (Step 12): End-to-end testing with all layers
