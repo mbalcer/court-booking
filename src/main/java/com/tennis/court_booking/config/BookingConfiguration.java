@@ -1,7 +1,5 @@
 package com.tennis.court_booking.config;
 
-import com.tennis.court_booking.adapter.out.event.LoggingEventPublisher;
-import com.tennis.court_booking.adapter.out.persistence.InMemoryBookingRepository;
 import com.tennis.court_booking.application.port.in.BookingUseCase;
 import com.tennis.court_booking.application.port.out.BookingEventPublisher;
 import com.tennis.court_booking.application.port.out.BookingRepository;
@@ -21,11 +19,10 @@ import java.time.LocalTime;
  * This configuration:
  * - Defines business policies with configurable parameters
  * - Creates domain service with required policies
- * - Provides stub implementations for outbound ports (repository, event publisher)
  * - Wires the application service that implements the use case
  *
- * NOTE: Repository and event publisher implementations are temporary stubs
- * that will be replaced with real implementations in Steps 9-10.
+ * Note: Adapter implementations (BookingRepositoryAdapter, BookingEventPublisherAdapter)
+ * are auto-detected via @Component scanning and injected automatically.
  */
 @Configuration
 public class BookingConfiguration {
@@ -71,37 +68,14 @@ public class BookingConfiguration {
     }
 
     /**
-     * Configures the booking repository.
-     * Uses in-memory implementation for development/testing.
-     *
-     * NOTE: This will be replaced with JPA repository implementation in Step 9.
-     *
-     * @return in-memory booking repository
-     */
-    @Bean
-    public BookingRepository bookingRepository() {
-        return new InMemoryBookingRepository();
-    }
-
-    /**
-     * Configures the booking event publisher.
-     * Uses logging implementation for development/testing.
-     *
-     * NOTE: This will be replaced with Kafka publisher implementation in Step 10.
-     *
-     * @return logging event publisher
-     */
-    @Bean
-    public BookingEventPublisher bookingEventPublisher() {
-        return new LoggingEventPublisher();
-    }
-
-    /**
      * Configures the booking application service (use case implementation).
      * Orchestrates the complete booking reservation flow.
      *
-     * @param bookingRepository the repository for persistence operations
-     * @param eventPublisher the publisher for domain events
+     * The repository and event publisher are injected automatically from their
+     * @Component implementations (BookingRepositoryAdapter and BookingEventPublisherAdapter).
+     *
+     * @param bookingRepository the repository for persistence operations (auto-injected)
+     * @param eventPublisher the publisher for domain events (auto-injected)
      * @param domainService the domain service for business logic
      * @return configured booking application service as BookingUseCase
      */
