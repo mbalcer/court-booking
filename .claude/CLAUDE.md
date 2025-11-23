@@ -75,12 +75,15 @@ This project follows **hexagonal architecture** with strict dependency rules: de
 ├─────────────────────────────────────────────────────────────────┤
 │                  DOMAIN LAYER (CORE) ✓ COMPLETE                 │
 │      Entities │ Value Objects │ Services │ Policies │ Excp.     │
+├─────────────────────────────────────────────────────────────────┤
+│              CONFIGURATION ✓ COMPLETE                           │
+│        Spring Wiring │ Bean Definitions                         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Current Implementation Status
 
-**Completed** (Steps 1-10):
+**Completed** (Steps 1-11):
 - **Domain Layer** (Steps 1-5):
   - Domain entities (`Booking`)
   - Value objects (`TimeSlot`)
@@ -115,8 +118,14 @@ This project follows **hexagonal architecture** with strict dependency rules: de
     - `BookingEventMapper` for domain event to Kafka DTO conversions
     - Spring Kafka integration for async event publishing
 
-**To Be Implemented** (Steps 11+):
-- Configuration and wiring
+- **Configuration Layer** (Step 11):
+  - `BookingConfiguration`: Spring configuration class wiring all dependencies
+  - Configures business policies with operating hours (8:00-20:00)
+  - Wires domain service, application service
+  - Adapter implementations auto-detected via @Component scanning
+  - Enables full dependency injection throughout the application
+
+**To Be Implemented** (Steps 12+):
 - Integration tests
 - Additional REST endpoints (GET, DELETE)
 
@@ -125,6 +134,8 @@ This project follows **hexagonal architecture** with strict dependency rules: de
 ```
 src/main/java/com/tennis/court_booking/
 ├── CourtBookingApplication.java       # Spring Boot entry point
+├── config/                            # Spring configuration
+│   └── BookingConfiguration.java      # Wires all dependencies with @Configuration
 ├── domain/                            # Pure domain logic (no Spring dependencies)
 │   ├── entity/
 │   │   └── Booking.java               # Aggregate root with identity-based equality
@@ -846,15 +857,24 @@ public class BookingApplicationService implements BookingUseCase {
 
 ## Next Steps in Implementation
 
-The domain layer (Steps 1-5), application layer (Steps 6-7), and all adapters (Steps 8-10) are now complete. The next phases are:
+The domain layer (Steps 1-5), application layer (Steps 6-7), all adapters (Steps 8-10), and configuration (Step 11) are now complete. The application is fully functional with database persistence and event publishing. The next phases are:
 
 1. ~~**REST Adapter** (Step 8): Controllers and DTOs for HTTP API~~ ✓ COMPLETE
 2. ~~**Persistence Adapter** (Step 9): JPA entities and repository implementations~~ ✓ COMPLETE
 3. ~~**Event Adapter** (Step 10): Kafka event publishing~~ ✓ COMPLETE
-4. **Configuration** (Step 11): Wire dependencies with Spring `@Configuration`
+4. ~~**Configuration** (Step 11): Wire dependencies with Spring `@Configuration`~~ ✓ COMPLETE
 5. **Integration Tests** (Step 12): End-to-end testing with all layers
 6. **Additional Endpoints** (Step 13): GET and DELETE operations
 7. **Refactoring & Polish** (Step 14): Clean up, ensure best practices
+
+**Current Application State**:
+- ✅ Fully functional REST API at `/api/bookings`
+- ✅ All business logic implemented and tested
+- ✅ Dependency injection configured
+- ✅ JPA persistence with H2 database
+- ✅ Kafka event publishing for domain events
+- ⏳ Integration tests (Step 12)
+- ⏳ Additional CRUD endpoints (Step 13)
 
 ## References
 
