@@ -64,7 +64,7 @@
 - Minimal context test
 
 ## Step 12 — Manual testing
-- Configure application.yaml to handle DB(H2) and Kafka
+- Configure application.yaml to handle DB(Postgres) and Kafka
 - Create docker-compose with all needed dependencies
 - Call REST endpoint and ensure that all works correctly
 
