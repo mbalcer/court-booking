@@ -63,26 +63,33 @@
 - Bind adapters to ports
 - Minimal context test
 
-## Step 12 — End-to-end Booking Scenario Test
-- Run application with H2
-- Call REST endpoint
-- Validate stored data & published Kafka message
+## Step 12 — Manual testing
+- Configure application.yaml to handle DB(H2) and Kafka
+- Create docker-compose with all needed dependencies
+- Call REST endpoint and ensure that all works correctly
 
-## Step 13 — Additional Endpoints
+## Step 13 — End-to-end Booking Scenario Test
+- Configure application-test.yaml
+- End-to-end integration test for booking flow
+- Repository integration tests with @DataJpaTest
+- Kafka event publishing integration tests with @EmbeddedKafka
+- REST API integration tests with @SpringBootTest
+
+## Step 14 — Additional Endpoints
 - `GET /api/bookings`
 - `DELETE /api/bookings/{id}`
-- Integration tests
+- Integration tests for the created endpoints
 
-## Step 14 — Refactoring
+## Step 15 — Refactoring
 - Ensure domain layer has zero dependencies on Spring, REST, Kafka, or JPA
 - Clean mapping separation
 
-## Step 15 — Optional Extensions
+## Step 16 — Optional Extensions
 - Implement Kafka consumer adapter that logs or processes events
 - Add OpenAPI documentation
 - Add Docker Compose with Kafka + Postgres
 
-## Step 16 — Documentation & Deployment
+## Step 17 — Documentation & Deployment
 - Create README
 - Add Postman collection
 - Produce Docker images
