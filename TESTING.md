@@ -6,12 +6,35 @@ This guide provides step-by-step instructions for manually testing the Tennis Co
 
 - Java 21 installed
 - Gradle installed (or use the wrapper `./gradlew`)
+- Docker and Docker Compose installed
 - curl or Postman for API testing
-- (Optional) Docker for Kafka testing
 
 ## Quick Start
 
-### 1. Start the Application
+### 1. Start Dependencies (Kafka + Zookeeper)
+
+Start the required infrastructure using Docker Compose:
+
+```bash
+docker-compose up -d
+```
+
+This will start:
+- **Zookeeper** on port 2181 (Kafka coordination)
+- **Kafka** on port 9092 (message broker)
+- **Kafka UI** on port 8090 (web interface for monitoring)
+
+**Verify services are running:**
+```bash
+docker-compose ps
+```
+
+All services should show status "Up" and "healthy".
+
+**Access Kafka UI:**
+Open your browser and navigate to http://localhost:8090 to monitor Kafka topics and messages.
+
+### 2. Start the Application
 
 ```bash
 ./gradlew bootRun
@@ -23,14 +46,18 @@ The application will start on `http://localhost:8080`
 - `Started CourtBookingApplication` - Application started successfully
 - `H2 console available at '/h2-console'` - Database console is ready
 - `Tomcat started on port 8080` - Web server is running
+- No Kafka connection errors (if Kafka is running)
 
-### 2. Verify Application is Running
+### 3. Verify Application is Running
 
+Try creating a booking:
 ```bash
-curl http://localhost:8080/actuator/health
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{"date": "2024-06-15", "start": "10:00", "end": "11:00"}'
 ```
 
-If you get a 404, that's expected (actuator not configured). Try the main endpoint instead.
+You should get an HTTP 201 response with the booking details.
 
 ## Testing Scenarios
 
@@ -302,72 +329,37 @@ After creating bookings via the REST API, you should see them in the database wi
 
 ---
 
-## Testing Kafka Event Publishing (Optional)
+## Verifying Kafka Event Publishing
 
-The application publishes `BookingCreatedEvent` to Kafka whenever a booking is successfully created. **Kafka is optional** - the application will run without it, but events won't be published.
+The application publishes `BookingCreatedEvent` to Kafka whenever a booking is successfully created.
 
-### Option 1: Test Without Kafka
+### Using Kafka UI (Recommended)
 
-**What happens:**
-- Application starts normally
-- Bookings work correctly
-- You'll see WARN logs: `Failed to send metadata after 60000 ms` (this is expected)
-- Events are not published, but the application continues to function
+The easiest way to verify events is using the Kafka UI web interface:
 
-### Option 2: Run Kafka Locally (Docker)
-
-**1. Start Kafka with Docker Compose**
-
-Create `docker-compose.yml`:
-```yaml
-version: '3.8'
-services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-
-  kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-```
-
-**2. Start Kafka:**
+**1. Ensure Docker Compose services are running:**
 ```bash
-docker-compose up -d
+docker-compose ps
 ```
 
-**3. Create the topic:**
+**2. Access Kafka UI:**
+Open your browser and navigate to: **http://localhost:8090**
+
+**3. View the `booking-created` topic:**
+- Click on "Topics" in the left menu
+- Find the `booking-created` topic
+- Click "Messages" to see published events
+- Events are automatically created when the application starts (Kafka auto-creates topics)
+
+**4. Create a booking and verify:**
 ```bash
-docker exec -it <kafka-container-id> kafka-topics --create \
-  --topic booking-created \
-  --bootstrap-server localhost:9092 \
-  --partitions 1 \
-  --replication-factor 1
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{"date": "2024-06-15", "start": "10:00", "end": "11:00"}'
 ```
 
-**4. Monitor events:**
-```bash
-docker exec -it <kafka-container-id> kafka-console-consumer \
-  --topic booking-created \
-  --bootstrap-server localhost:9092 \
-  --from-beginning
-```
-
-**5. Create a booking and verify event:**
-
-Create a booking (using any successful request from above), then check the Kafka consumer output. You should see:
+**5. Refresh the Kafka UI and verify the event:**
+You should see a new message in the `booking-created` topic with content:
 ```json
 {
   "booking_id": 1,
@@ -376,6 +368,54 @@ Create a booking (using any successful request from above), then check the Kafka
   "end_time": "11:00:00"
 }
 ```
+
+### Using Kafka Console Consumer (Alternative)
+
+If you prefer the command line:
+
+**1. Monitor events in real-time:**
+```bash
+docker exec -it court-booking-kafka kafka-console-consumer \
+  --topic booking-created \
+  --bootstrap-server localhost:9092 \
+  --from-beginning
+```
+
+**2. Create a booking** (in another terminal):
+```bash
+curl -X POST http://localhost:8080/api/bookings \
+  -H "Content-Type: application/json" \
+  -d '{"date": "2024-06-15", "start": "10:00", "end": "11:00"}'
+```
+
+**3. Verify the event appears** in the consumer terminal
+
+### Kafka Topic Management
+
+**List all topics:**
+```bash
+docker exec -it court-booking-kafka kafka-topics \
+  --list \
+  --bootstrap-server localhost:9092
+```
+
+**Describe the booking-created topic:**
+```bash
+docker exec -it court-booking-kafka kafka-topics \
+  --describe \
+  --topic booking-created \
+  --bootstrap-server localhost:9092
+```
+
+**Delete all messages** (reset for testing):
+```bash
+docker exec -it court-booking-kafka kafka-topics \
+  --delete \
+  --topic booking-created \
+  --bootstrap-server localhost:9092
+```
+
+The topic will be auto-created again when the next event is published.
 
 ---
 
@@ -403,11 +443,17 @@ DEBUG org.hibernate.SQL : insert into bookings (booking_date, end_time, start_ti
 TRACE o.h.t.d.s.BasicBinder : binding parameter [1] as [DATE] - [2024-06-15]
 ```
 
-**Kafka Publishing (without Kafka running):**
+**Kafka Event Publishing:**
+```
+INFO  c.t.c.a.o.e.BookingEventPublisherAdapter : Booking created event sent successfully for booking ID: 1
+```
+This confirms the event was successfully published to Kafka.
+
+**Kafka Connection Issues:**
 ```
 WARN  org.apache.kafka.clients.NetworkClient : Connection to node -1 could not be established
 ```
-This is **expected** if Kafka is not running. The application continues to work normally.
+If you see this, Kafka is not running. Start it with: `docker-compose up -d`
 
 ---
 
@@ -415,8 +461,17 @@ This is **expected** if Kafka is not running. The application continues to work 
 
 Use this checklist to verify all functionality:
 
+### Infrastructure Setup
+- [ ] Docker Compose services are running (`docker-compose ps`)
+- [ ] Kafka UI accessible at http://localhost:8090
 - [ ] Application starts without errors
+
+### Database Testing
 - [ ] Can access H2 console at http://localhost:8080/h2-console
+- [ ] Database connection works with correct credentials
+- [ ] Bookings table is auto-created
+
+### REST API Testing
 - [ ] Can create a valid booking (HTTP 201)
 - [ ] Booking appears in database with auto-generated ID
 - [ ] Cannot create booking before opening hours (HTTP 400)
@@ -426,8 +481,11 @@ Use this checklist to verify all functionality:
 - [ ] Invalid time slots are rejected (end before start)
 - [ ] Missing fields return appropriate errors
 - [ ] Error responses include descriptive messages
-- [ ] Logs show successful SQL inserts
-- [ ] (Optional) Events published to Kafka when available
+
+### Kafka Event Testing
+- [ ] Events published to Kafka successfully (check logs)
+- [ ] Events visible in Kafka UI at http://localhost:8090
+- [ ] Event format matches expected structure (booking_id, date, start_time, end_time)
 
 ---
 
@@ -459,11 +517,51 @@ server:
 2. Check the JDBC URL matches exactly: `jdbc:h2:mem:courtdb`
 3. Ensure H2 console is enabled in `application.yaml`
 
-### Kafka Warnings in Logs
+### Docker Compose Services Not Starting
 
-**Problem:** `Failed to send metadata` warnings
+**Problem:** Services fail to start or show unhealthy status
 
-**Solution:** This is normal if Kafka is not running. The application works fine without Kafka for testing the core booking functionality. Events simply won't be published.
+**Solution:**
+```bash
+# Stop all services
+docker-compose down
+
+# Remove volumes and restart
+docker-compose down -v
+docker-compose up -d
+
+# Check logs for specific service
+docker-compose logs kafka
+docker-compose logs zookeeper
+
+# Verify services are healthy
+docker-compose ps
+```
+
+### Kafka Connection Issues
+
+**Problem:** Application shows `Failed to send metadata` warnings
+
+**Solution:**
+1. Verify Kafka is running: `docker-compose ps`
+2. Check Kafka logs: `docker-compose logs kafka`
+3. Restart Kafka if needed: `docker-compose restart kafka`
+4. Ensure port 9092 is not blocked
+
+### Port Conflicts
+
+**Problem:** Docker services fail due to port conflicts
+
+**Solution:**
+- Port 8080 (Application) - Stop the application or change its port
+- Port 8090 (Kafka UI) - Stop other services using this port
+- Port 9092 (Kafka) - Check for other Kafka instances
+- Port 2181 (Zookeeper) - Check for other Zookeeper instances
+
+```bash
+# Check what's using a port (e.g., 9092)
+lsof -i :9092
+```
 
 ### Database is Empty After Restart
 
@@ -483,11 +581,25 @@ spring:
 ## Next Steps
 
 After manual testing, consider:
-1. Writing integration tests (Step 12)
-2. Adding GET and DELETE endpoints (Step 13)
+1. Writing integration tests (Step 13)
+2. Adding GET and DELETE endpoints (Step 14)
 3. Adding Spring Boot Actuator for health checks
 4. Configuring CORS for frontend integration
 5. Adding API documentation with Swagger/OpenAPI
+
+## Shutting Down
+
+When you're done testing:
+
+```bash
+# Stop the application (Ctrl+C in the terminal running ./gradlew bootRun)
+
+# Stop Docker Compose services
+docker-compose down
+
+# Or stop and remove volumes (clears Kafka topics)
+docker-compose down -v
+```
 
 ---
 

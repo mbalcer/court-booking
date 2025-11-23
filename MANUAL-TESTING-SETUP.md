@@ -8,26 +8,36 @@ All configurations for Step 12 (Manual Testing) have been set up and are ready t
 - ✅ **H2 Database** - In-memory database for testing
 - ✅ **H2 Console** - Web UI at `/h2-console` for database inspection
 - ✅ **JPA/Hibernate** - Auto-creates tables, shows SQL in logs
-- ✅ **Kafka** - Configured for event publishing (optional)
+- ✅ **Kafka** - Configured for event publishing to localhost:9092
 - ✅ **Logging** - DEBUG level for application code, SQL query logging
 - ✅ **Server Port** - 8080
 
-### 2. Testing Documentation
+### 2. Docker Compose Configuration (`docker-compose.yml`)
+- ✅ **Zookeeper** - Kafka coordination service (port 2181)
+- ✅ **Kafka** - Message broker (port 9092)
+- ✅ **Kafka UI** - Web interface for monitoring topics and messages (port 8090)
+- ✅ **Health checks** - All services have health monitoring
+- ✅ **Networking** - Custom bridge network for service communication
+
+### 3. Testing Documentation
 - ✅ **TESTING.md** - Comprehensive manual testing guide with:
+  - Docker Compose setup instructions
   - Step-by-step instructions
   - 9 detailed test scenarios (success + failure cases)
   - Expected requests and responses
   - H2 console instructions
-  - Kafka testing (optional)
-  - Troubleshooting guide
+  - Kafka UI and event verification
+  - Troubleshooting guide (including Docker issues)
 
 - ✅ **QUICK-REFERENCE.md** - Quick reference card with:
+  - Docker Compose startup commands
   - Common curl commands
   - Database queries
+  - Kafka UI access
   - Configuration summary
   - Architecture overview
 
-### 3. Automated Test Script
+### 4. Automated Test Script
 - ✅ **test-api.sh** - Executable script that runs all test scenarios
   - 9 automated tests covering all use cases
   - HTTP status code validation
@@ -39,6 +49,7 @@ All configurations for Step 12 (Manual Testing) have been set up and are ready t
 court-booking/
 ├── src/main/resources/
 │   └── application.yaml          # Updated with full configuration
+├── docker-compose.yml            # Docker infrastructure setup
 ├── TESTING.md                    # Comprehensive testing guide
 ├── QUICK-REFERENCE.md            # Quick reference card
 ├── test-api.sh                   # Automated test script (executable)
@@ -47,30 +58,38 @@ court-booking/
 
 ## How to Use
 
-### Quick Start (3 Steps)
+### Quick Start (4 Steps)
 
-1. **Start the application:**
+1. **Start Docker infrastructure (Kafka + Zookeeper):**
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **Start the application:**
    ```bash
    ./gradlew bootRun
    ```
 
-2. **Run the automated test script:**
+3. **Run the automated test script:**
    ```bash
    ./test-api.sh
    ```
 
-3. **Check the database:**
-   - Open browser: http://localhost:8080/h2-console
-   - Connect with: `jdbc:h2:mem:courtdb` / username: `sa` / no password
-   - Run: `SELECT * FROM bookings;`
+4. **Verify everything is working:**
+   - **H2 Database Console:** http://localhost:8080/h2-console
+     - Connect with: `jdbc:h2:mem:courtdb` / username: `sa` / no password
+     - Run: `SELECT * FROM bookings;`
+   - **Kafka UI:** http://localhost:8090
+     - Check the `booking-created` topic for events
 
 ### Detailed Testing
 
 For detailed testing instructions, see **TESTING.md** which includes:
+- Docker Compose setup and management
 - 9 complete test scenarios with expected results
 - H2 database console setup
-- Optional Kafka integration testing
-- Troubleshooting guide
+- Kafka UI integration and event verification
+- Troubleshooting guide (including Docker issues)
 - Full explanation of what happens internally
 
 ### Quick Commands
@@ -126,7 +145,14 @@ The test scenarios cover:
 ├─────────────────────────────────────────┤
 │   Persistence Layer (H2 Database)      │ ← Check with H2 console
 ├─────────────────────────────────────────┤
-│   Event Layer (Kafka - optional)       │ ← Optional verification
+│   Event Layer (Kafka)                  │ ← Verify with Kafka UI
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│        Infrastructure (Docker)          │
+│  • Zookeeper (port 2181)                │
+│  • Kafka (port 9092)                    │
+│  • Kafka UI (port 8090)                 │
 └─────────────────────────────────────────┘
 ```
 
@@ -136,14 +162,20 @@ The test scenarios cover:
 - ✅ Request received by controller
 - ✅ Domain service validates business rules
 - ✅ SQL INSERT statements (if successful)
-- ✅ Event published to Kafka (if Kafka running)
+- ✅ Event published to Kafka successfully
 - ✅ Response sent to client
 
-### In the H2 Console:
+### In the H2 Console (http://localhost:8080/h2-console):
 - ✅ Bookings table auto-created
 - ✅ Auto-generated IDs (1, 2, 3...)
 - ✅ Correct date and time values stored
 - ✅ No overlapping bookings for same date
+
+### In the Kafka UI (http://localhost:8090):
+- ✅ `booking-created` topic exists
+- ✅ Events published with correct format
+- ✅ Message key is booking ID
+- ✅ Timestamp and partition information
 
 ### In the API Responses:
 - ✅ HTTP 201 for successful bookings
@@ -151,38 +183,59 @@ The test scenarios cover:
 - ✅ Descriptive error messages
 - ✅ Consistent JSON format
 
-## Notes
+## Infrastructure Requirements
 
-- **Database:** H2 in-memory - data is lost on application restart (expected behavior)
-- **Kafka:** Optional - application works without Kafka, events just won't be published
-- **Port:** Application runs on port 8080 by default (configurable in application.yaml)
-- **Opening Hours:** Configured as 08:00-20:00 in BookingConfiguration.java
+- **Docker & Docker Compose:** Required for Kafka infrastructure
+- **Java 21:** Required for Spring Boot application
+- **Ports Used:**
+  - 8080 - Spring Boot application
+  - 8090 - Kafka UI web interface
+  - 9092 - Kafka broker
+  - 2181 - Zookeeper
+
+## Configuration Details
+
+- **Database:** H2 in-memory (`jdbc:h2:mem:courtdb`) - data is lost on application restart
+- **Kafka Topic:** `booking-created` - auto-created on first event
+- **Opening Hours:** 08:00-20:00 (configured in BookingConfiguration.java)
+- **Logging:** DEBUG level for application code, SQL query logging enabled
 
 ## Next Steps
 
 After manual testing:
-1. Write integration tests (Step 12 - automated integration tests)
-2. Add GET /api/bookings endpoint (Step 13)
-3. Add DELETE /api/bookings/{id} endpoint (Step 13)
+1. Write integration tests (Step 13 - automated integration tests)
+2. Add GET /api/bookings endpoint (Step 14)
+3. Add DELETE /api/bookings/{id} endpoint (Step 14)
 4. Consider adding Spring Boot Actuator for health checks
 5. Consider adding API documentation (Swagger/OpenAPI)
 
 ## Troubleshooting
 
 If you encounter issues:
-1. Check **TESTING.md** → Troubleshooting section
-2. Verify Java 21 is installed: `java -version`
-3. Verify port 8080 is available: `lsof -i :8080`
-4. Check application logs for errors
-5. Verify H2 console connection details
+1. **Check Docker services:** `docker-compose ps`
+2. **Check Docker logs:** `docker-compose logs kafka` or `docker-compose logs zookeeper`
+3. **Restart Docker services:** `docker-compose down && docker-compose up -d`
+4. **Verify Java 21 is installed:** `java -version`
+5. **Check port availability:**
+   - Port 8080: `lsof -i :8080`
+   - Port 9092: `lsof -i :9092`
+   - Port 8090: `lsof -i :8090`
+6. **Full documentation:** Check **TESTING.md** → Troubleshooting section
 
 ## Summary
 
 ✅ All manual testing configurations are complete and ready to use
-✅ Application can be started with `./gradlew bootRun`
+✅ Docker Compose infrastructure configured (Kafka + Zookeeper + Kafka UI)
+✅ Application configuration complete with H2, JPA, and Kafka
 ✅ REST API can be tested with curl or the provided test script
-✅ Database can be inspected via H2 console
+✅ Database can be inspected via H2 console at http://localhost:8080/h2-console
+✅ Kafka events can be monitored via Kafka UI at http://localhost:8090
 ✅ All business rules are enforced and can be verified
-✅ Comprehensive documentation provided
+✅ Comprehensive documentation provided (TESTING.md, QUICK-REFERENCE.md)
 
-**The application is fully configured for Step 12 manual testing!**
+**The application is fully configured for Step 12 manual testing per plan.md requirements!**
+
+### According to plan.md Step 12:
+- ✅ Configure application.yaml to handle DB(H2) and Kafka
+- ✅ Create docker-compose with all needed dependencies
+- ✅ Call REST endpoint and ensure that all works correctly

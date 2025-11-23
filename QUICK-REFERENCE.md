@@ -1,13 +1,34 @@
 # Quick Reference Card - Manual Testing
 
-## Start Application
+## Start Infrastructure & Application
+
+### 1. Start Docker Services (Kafka + Zookeeper)
+```bash
+docker-compose up -d
+```
+
+### 2. Start Application
 ```bash
 ./gradlew bootRun
 ```
 
-## Run Automated Test Script
+### 3. Run Automated Test Script
 ```bash
 ./test-api.sh
+```
+
+## Quick Access URLs
+
+- **Application:** http://localhost:8080
+- **H2 Database Console:** http://localhost:8080/h2-console
+- **Kafka UI:** http://localhost:8090
+
+## Stop Services
+
+```bash
+# Stop application (Ctrl+C)
+# Stop Docker services
+docker-compose down
 ```
 
 ## Manual Test Commands
