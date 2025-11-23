@@ -1,3 +1,55 @@
 spring:
   application:
     name: court-booking
+
+  # H2 Database Configuration (In-Memory for Testing)
+  datasource:
+    url: jdbc:h2:mem:courtdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  # H2 Console Configuration (Web UI for Database)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: false
+
+  # JPA/Hibernate Configuration
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+
+# Custom Kafka Topic Configuration
+kafka:
+  topic:
+    booking-created: booking-created
+
+# Server Configuration
+server:
+  port: 8080
+
+# Logging Configuration
+logging:
+  level:
+    com.tennis.court_booking: DEBUG
+    org.springframework.web: INFO
+    org.springframework.kafka: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
