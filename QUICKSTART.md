@@ -18,6 +18,36 @@ That's it! The script will run all test scenarios automatically.
 
 ---
 
+## 🐳 Using Docker Compose (With Kafka)
+
+### 1. Start All Dependencies
+```bash
+docker-compose up -d
+```
+
+### 2. Start the Application
+```bash
+./gradlew bootRun
+```
+
+### 3. Run Tests
+```bash
+./test-api.sh
+```
+
+### 4. View Kafka Events
+- **Kafka UI:** http://localhost:8090
+- **Or console:** `docker exec -it court-booking-kafka kafka-console-consumer --bootstrap-server localhost:9092 --topic booking-created --from-beginning`
+
+### 5. Stop Everything
+```bash
+docker-compose down
+```
+
+See **DOCKER.md** for detailed Docker commands and troubleshooting.
+
+---
+
 ## 📋 Manual Testing (Using curl)
 
 ### Create a booking:
@@ -54,31 +84,9 @@ Import `postman-collection.json` for ready-to-use test requests.
 
 ## 📊 With Kafka (Full Setup)
 
-See **TESTING.md** for complete instructions including Kafka setup.
+**Recommended:** Use Docker Compose (see section above)
 
-### Quick Kafka Start:
-```bash
-# Start Kafka with Docker
-docker run -d --name zookeeper -p 2181:2181 \
-  -e ZOOKEEPER_CLIENT_PORT=2181 \
-  confluentinc/cp-zookeeper:7.5.0
-
-docker run -d --name kafka -p 9092:9092 \
-  -e KAFKA_BROKER_ID=1 \
-  -e KAFKA_ZOOKEEPER_CONNECT=localhost:2181 \
-  -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
-  -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 \
-  confluentinc/cp-kafka:7.5.0
-
-# Wait 10 seconds, then create topic
-docker exec kafka kafka-topics --create \
-  --topic booking-created \
-  --bootstrap-server localhost:9092 \
-  --replication-factor 1 --partitions 1
-
-# Start app (default profile uses Kafka)
-./gradlew bootRun
-```
+**Alternative:** Manual Docker setup (see **DOCKER.md** or **TESTING.md** for detailed instructions)
 
 ---
 
