@@ -1,3 +1,6 @@
+# Test Profile - Simplified configuration for testing without Kafka
+# Run with: ./gradlew bootRun --args='--spring.profiles.active=test'
+
 spring:
   application:
     name: court-booking
@@ -26,21 +29,12 @@ spring:
         use_sql_comments: true
     database-platform: org.hibernate.dialect.H2Dialect
 
-  # Kafka Configuration
+  # Kafka - Disabled for simple testing
   kafka:
     bootstrap-servers: localhost:9092
-    producer:
-      key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      properties:
-        spring.json.add.type.headers: false
-    consumer:
-      group-id: court-booking-group
-      auto-offset-reset: earliest
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      properties:
-        spring.json.trusted.packages: "*"
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 
 # Custom Application Properties
 kafka:
@@ -58,7 +52,6 @@ server:
 logging:
   level:
     com.tennis.court_booking: DEBUG
-    org.springframework.kafka: INFO
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
