@@ -1,0 +1,225 @@
+{
+  "info": {
+    "name": "Court Booking API",
+    "description": "Test collection for Tennis Court Booking Application",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Valid Booking (10:00-11:00)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"date\": \"2025-12-01\",\n    \"start\": \"10:00\",\n    \"end\": \"11:00\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/bookings",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "bookings"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Create Second Booking (14:00-15:30)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"date\": \"2025-12-01\",\n    \"start\": \"14:00\",\n    \"end\": \"15:30\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/bookings",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "bookings"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Adjacent Booking - No Overlap (11:00-12:00)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"date\": \"2025-12-01\",\n    \"start\": \"11:00\",\n    \"end\": \"12:00\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/bookings",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "bookings"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Overlapping Booking (Should Fail - 400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"date\": \"2025-12-01\",\n    \"start\": \"10:30\",\n    \"end\": \"11:30\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/bookings",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "bookings"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Before Opening Hours (Should Fail - 400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"date\": \"2025-12-01\",\n    \"start\": \"07:00\",\n    \"end\": \"08:00\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/bookings",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "bookings"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "After Closing Hours (Should Fail - 400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"date\": \"2025-12-01\",\n    \"start\": \"19:30\",\n    \"end\": \"21:00\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/bookings",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "bookings"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Invalid Time Slot (Should Fail - 400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"date\": \"2025-12-01\",\n    \"start\": \"15:00\",\n    \"end\": \"14:00\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/bookings",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "bookings"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "At Opening Time (08:00-09:00)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"date\": \"2025-12-02\",\n    \"start\": \"08:00\",\n    \"end\": \"09:00\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/bookings",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "bookings"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Ending at Closing Time (19:00-20:00)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"date\": \"2025-12-02\",\n    \"start\": \"19:00\",\n    \"end\": \"20:00\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/bookings",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "bookings"]
+        }
+      },
+      "response": []
+    }
+  ]
+}
